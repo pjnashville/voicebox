@@ -1,4 +1,4 @@
-const CACHE_NAME = 'voicebox-v6';
+const CACHE_NAME = 'voicebox-v7';
 const BASE = '/voicebox/';
 const ASSETS = [
   BASE,

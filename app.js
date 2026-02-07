@@ -189,6 +189,42 @@ async function copyText(text) {
   }
 }
 
+// Deferred clipboard for iOS Safari — clipboard.write() must be called
+// in a user gesture, but the data can be provided via a promise that
+// resolves later (e.g. after an API call completes).
+let pendingClipboardResolve = null;
+
+function setupDeferredClipboard() {
+  if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
+    return false;
+  }
+  try {
+    const textPromise = new Promise((resolve) => {
+      pendingClipboardResolve = resolve;
+    });
+    navigator.clipboard.write([
+      new ClipboardItem({
+        'text/plain': textPromise.then(
+          (text) => new Blob([text], { type: 'text/plain' })
+        ),
+      }),
+    ]);
+    return true;
+  } catch {
+    pendingClipboardResolve = null;
+    return false;
+  }
+}
+
+function resolveDeferredClipboard(text) {
+  if (pendingClipboardResolve) {
+    pendingClipboardResolve(text);
+    pendingClipboardResolve = null;
+    return true;
+  }
+  return false;
+}
+
 // ----- Formatting -----
 function formatDuration(seconds) {
   const m = Math.floor(seconds / 60);
@@ -314,13 +350,10 @@ btnRecord.addEventListener('pointerup', (e) => {
   const pressDuration = Date.now() - pointerDownTime;
 
   if (isRecording()) {
-    if (isHoldMode) {
-      // Release from hold → stop
-      stopRecording();
-    } else {
-      // Tap while in tap-mode recording → stop
-      stopRecording();
-    }
+    // Set up deferred clipboard while still in user gesture context
+    // (iOS Safari requires clipboard.write() in a user gesture)
+    setupDeferredClipboard();
+    stopRecording();
   } else if (pressDuration < HOLD_THRESHOLD) {
     // Quick tap — toggle on in tap mode
     startRecording(false);
@@ -332,6 +365,7 @@ btnRecord.addEventListener('pointerup', (e) => {
 btnRecord.addEventListener('pointercancel', () => {
   clearTimeout(holdTimer);
   if (isRecording() && isHoldMode) {
+    setupDeferredClipboard();
     stopRecording();
   }
 });
@@ -454,7 +488,10 @@ async function transcribe(id) {
 
   // Auto-copy on successful transcription + auto-launch app
   if (record.status === 'done' && record.text) {
-    await copyText(record.text);
+    // Resolve deferred clipboard (set up in user gesture), fall back to direct copy
+    if (!resolveDeferredClipboard(record.text)) {
+      await copyText(record.text);
+    }
     const targetId = getTargetApp();
     const target = APP_TARGETS.find((a) => a.id === targetId);
     if (target && target.url) {
@@ -506,6 +543,7 @@ btnRetry.addEventListener('click', async () => {
   if (!activeRecordId) return;
   const record = await dbGet(activeRecordId);
   if (!record) return;
+  setupDeferredClipboard();
   record.status = 'pending';
   record.error = '';
   await dbPut(record);
