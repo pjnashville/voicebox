@@ -247,7 +247,7 @@ function escapeHtml(str) {
 }
 
 // ============================================================
-// RECORDING — hold-to-record + tap-to-toggle
+// RECORDING — tap-to-toggle
 // ============================================================
 
 let mediaRecorder = null;
