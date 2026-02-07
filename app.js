@@ -4,7 +4,17 @@
 
 // ----- Service Worker Registration -----
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/voicebox/sw.js');
+  navigator.serviceWorker.register('/voicebox/sw.js', { updateViaCache: 'none' })
+    .then((reg) => {
+      // Check for updates on every page load
+      reg.update();
+    });
+  // Auto-reload when new service worker activates
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data?.type === 'SW_UPDATED') {
+      window.location.reload();
+    }
+  });
 }
 
 // ----- IndexedDB -----
