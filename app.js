@@ -258,6 +258,88 @@ function escapeHtml(str) {
 }
 
 // ============================================================
+// KITT SCANNER BAR
+// ============================================================
+
+const KITT_SEGMENTS = 24;
+const KITT_SPEED = 1.6; // full sweeps per second
+let kittAnimFrame = null;
+let kittSegs = [];
+
+// Build segments once
+(function initKitt() {
+  for (let i = 0; i < KITT_SEGMENTS; i++) {
+    const seg = document.createElement('div');
+    seg.className = 'kitt-seg';
+    kittBar.appendChild(seg);
+    kittSegs.push(seg);
+  }
+})();
+
+function startKitt() {
+  kittBar.classList.remove('hidden');
+  const startTime = performance.now();
+
+  function animate(now) {
+    const elapsed = (now - startTime) / 1000;
+    // Triangle wave: sweeps 0→1→0→1... smoothly
+    const raw = (elapsed * KITT_SPEED) % 2;
+    const pos = raw <= 1 ? raw : 2 - raw;
+    // Apply easing for deceleration at edges (sine ease)
+    const eased = 0.5 - 0.5 * Math.cos(pos * Math.PI);
+    const peak = eased * (KITT_SEGMENTS - 1);
+
+    for (let i = 0; i < KITT_SEGMENTS; i++) {
+      const dist = Math.abs(i - peak);
+      let brightness;
+      if (dist < 0.5) {
+        brightness = 1.0; // hot center
+      } else if (dist < 4.5) {
+        // Trailing glow — exponential falloff over ~4 segments
+        brightness = Math.pow(0.38, dist - 0.5);
+      } else {
+        brightness = 0;
+      }
+
+      const seg = kittSegs[i];
+      if (brightness <= 0) {
+        seg.style.background = 'rgba(233, 69, 96, 0.1)';
+        seg.style.boxShadow = 'none';
+      } else {
+        // Interpolate from dim red to bright orange-white
+        const r = Math.round(180 + 75 * brightness);
+        const g = Math.round(30 + 60 * brightness);
+        const b = Math.round(20 + 20 * brightness);
+        const a = 0.15 + 0.85 * brightness;
+        seg.style.background = `rgba(${r}, ${g}, ${b}, ${a})`;
+        if (brightness > 0.3) {
+          const glow = brightness * 12;
+          const glowA = brightness * 0.7;
+          seg.style.boxShadow = `0 0 ${glow}px ${glow * 0.4}px rgba(255, 60, 30, ${glowA})`;
+        } else {
+          seg.style.boxShadow = 'none';
+        }
+      }
+    }
+
+    kittAnimFrame = requestAnimationFrame(animate);
+  }
+
+  kittAnimFrame = requestAnimationFrame(animate);
+}
+
+function stopKitt() {
+  cancelAnimationFrame(kittAnimFrame);
+  kittAnimFrame = null;
+  kittBar.classList.add('hidden');
+  // Reset segments
+  for (const seg of kittSegs) {
+    seg.style.background = '';
+    seg.style.boxShadow = '';
+  }
+}
+
+// ============================================================
 // RECORDING — tap-to-toggle
 // ============================================================
 
@@ -310,7 +392,7 @@ async function startRecording() {
     btnRecord.classList.add('recording');
     recordBtnLabel.textContent = 'Tap to stop';
     recordingIndicator.classList.remove('hidden');
-    kittBar.classList.remove('hidden');
+    startKitt();
     startTimer();
   } catch (err) {
     toast('Microphone access denied');
@@ -323,7 +405,7 @@ function stopRecording() {
   }
   btnRecord.classList.remove('recording');
   recordingIndicator.classList.add('hidden');
-  kittBar.classList.add('hidden');
+  stopKitt();
   recordBtnLabel.textContent = 'Tap to record';
   stopTimer();
 }
