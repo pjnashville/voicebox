@@ -113,6 +113,7 @@ const recordModeLabel = $('#record-mode-label');
 const recordBtnLabel = $('#record-btn-label');
 const historyList = $('#history-list');
 const historyEmpty = $('#history-empty');
+const btnClearAll = $('#btn-clear-all');
 
 // Result view
 const btnResultBack = $('#btn-result-back');
@@ -358,12 +359,30 @@ async function saveAndTranscribe(blob, duration) {
   };
   await dbPut(record);
 
-  activeRecordId = id;
-  showResultView(record);
-  showView('result');
-  renderHistory();
+  const targetId = getTargetApp();
+  const target = APP_TARGETS.find((a) => a.id === targetId);
+  const hasAppTarget = target && target.url;
 
-  await transcribe(id);
+  if (hasAppTarget) {
+    // Skip result screen — stay on record view, transcribe in background
+    renderHistory();
+    toast('Transcribing...');
+    await transcribe(id);
+    // On error, navigate to result view so user can retry
+    const updated = await dbGet(id);
+    if (updated && updated.status === 'error') {
+      activeRecordId = id;
+      showResultView(updated);
+      showView('result');
+    }
+  } else {
+    // No app target — show result view as usual
+    activeRecordId = id;
+    showResultView(record);
+    showView('result');
+    renderHistory();
+    await transcribe(id);
+  }
 }
 
 async function transcribe(id) {
@@ -651,10 +670,12 @@ async function renderHistory() {
 
   if (records.length === 0) {
     historyEmpty.classList.remove('hidden');
+    btnClearAll.classList.add('hidden');
     return;
   }
 
   historyEmpty.classList.add('hidden');
+  btnClearAll.classList.remove('hidden');
 
   for (const rec of records) {
     const wrap = document.createElement('div');
@@ -910,6 +931,15 @@ btnDeleteAll.addEventListener('click', async () => {
   stopPlayback();
   renderHistory();
   updateStorageInfo();
+  toast('All recordings deleted');
+});
+
+// Clear All button in history section
+btnClearAll.addEventListener('click', async () => {
+  if (!confirm('Are you sure? This cannot be undone.')) return;
+  await dbClear();
+  stopPlayback();
+  renderHistory();
   toast('All recordings deleted');
 });
 

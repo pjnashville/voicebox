@@ -266,13 +266,35 @@ header h1 {
   overflow: hidden;
 }
 
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  margin-bottom: 0.5rem;
+}
+
 .history-section h2 {
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
-  margin-bottom: 0.5rem;
-  flex-shrink: 0;
+}
+
+.btn-clear-all {
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-clear-all:active {
+  background: rgba(231, 76, 60, 0.15);
 }
 
 .history-list {
