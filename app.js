@@ -109,7 +109,6 @@ const btnRecord = $('#btn-record');
 const btnSettings = $('#btn-settings');
 const recordingIndicator = $('#recording-indicator');
 const recordingTime = $('#recording-time');
-const recordModeLabel = $('#record-mode-label');
 const recordBtnLabel = $('#record-btn-label');
 const historyList = $('#history-list');
 const historyEmpty = $('#history-empty');
@@ -256,11 +255,7 @@ let audioChunks = [];
 let recordingStartTime = 0;
 let timerInterval = null;
 
-// Hold vs tap detection
-const HOLD_THRESHOLD = 300; // ms
-let pointerDownTime = 0;
-let isHoldMode = false;
-let holdTimer = null;
+// Tap-to-toggle recording
 
 function startTimer() {
   recordingStartTime = Date.now();
@@ -276,11 +271,10 @@ function stopTimer() {
   timerInterval = null;
 }
 
-async function startRecording(holdMode) {
+async function startRecording() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioChunks = [];
-    isHoldMode = holdMode;
 
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
       ? 'audio/webm;codecs=opus'
@@ -302,16 +296,8 @@ async function startRecording(holdMode) {
     };
 
     mediaRecorder.start(250);
-
-    if (holdMode) {
-      btnRecord.classList.add('hold-recording');
-      recordModeLabel.textContent = 'Hold mode — release to stop';
-      recordBtnLabel.textContent = 'Release to stop';
-    } else {
-      btnRecord.classList.add('recording');
-      recordModeLabel.textContent = 'Tap mode — tap to stop';
-      recordBtnLabel.textContent = 'Tap to stop';
-    }
+    btnRecord.classList.add('recording');
+    recordBtnLabel.textContent = 'Tap to stop';
     recordingIndicator.classList.remove('hidden');
     startTimer();
   } catch (err) {
@@ -323,10 +309,9 @@ function stopRecording() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();
   }
-  btnRecord.classList.remove('recording', 'hold-recording');
+  btnRecord.classList.remove('recording');
   recordingIndicator.classList.add('hidden');
-  recordBtnLabel.textContent = 'Tap or hold to record';
-  recordModeLabel.textContent = '';
+  recordBtnLabel.textContent = 'Tap to record';
   stopTimer();
 }
 
@@ -334,50 +319,16 @@ function isRecording() {
   return mediaRecorder && mediaRecorder.state === 'recording';
 }
 
-// Pointer events for hold/tap detection
-btnRecord.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  // Set up deferred clipboard early — pointerdown is the strongest user gesture
-  // on iOS Safari, especially for hold-to-record where pointerup may not qualify
+// Tap to toggle recording — set up deferred clipboard on every tap
+// so iOS Safari can write to clipboard after async transcription
+btnRecord.addEventListener('click', () => {
   setupDeferredClipboard();
-  if (isRecording()) return; // will be handled by pointerup
-  pointerDownTime = Date.now();
-  holdTimer = setTimeout(() => {
-    // Held long enough — start in hold mode
-    if (!isRecording()) {
-      startRecording(true);
-    }
-  }, HOLD_THRESHOLD);
-});
-
-btnRecord.addEventListener('pointerup', (e) => {
-  e.preventDefault();
-  clearTimeout(holdTimer);
-  const pressDuration = Date.now() - pointerDownTime;
-
   if (isRecording()) {
-    // Set up deferred clipboard while still in user gesture context
-    // (iOS Safari requires clipboard.write() in a user gesture)
-    setupDeferredClipboard();
     stopRecording();
-  } else if (pressDuration < HOLD_THRESHOLD) {
-    // Quick tap — toggle on in tap mode
-    startRecording(false);
-  }
-  // If pressDuration >= HOLD_THRESHOLD and recording hasn't started yet,
-  // that means startRecording was called in the timeout above — do nothing
-});
-
-btnRecord.addEventListener('pointercancel', () => {
-  clearTimeout(holdTimer);
-  if (isRecording() && isHoldMode) {
-    setupDeferredClipboard();
-    stopRecording();
+  } else {
+    startRecording();
   }
 });
-
-// Prevent context menu on long press
-btnRecord.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // ============================================================
 // SAVE & TRANSCRIBE

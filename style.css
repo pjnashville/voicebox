@@ -185,7 +185,7 @@ header h1 {
   touch-action: none;
 }
 
-.record-btn:active:not(.recording):not(.hold-recording) {
+.record-btn:active:not(.recording) {
   background: #2a2a50;
 }
 
@@ -193,12 +193,6 @@ header h1 {
   background: var(--accent);
   color: #fff;
   animation: bar-pulse 1.5s ease-in-out infinite;
-}
-
-.record-btn.hold-recording {
-  background: #c0392b;
-  color: #fff;
-  animation: bar-pulse 1s ease-in-out infinite;
 }
 
 @keyframes bar-pulse {
@@ -211,13 +205,11 @@ header h1 {
   pointer-events: none;
 }
 
-.record-btn.recording .mic-icon,
-.record-btn.hold-recording .mic-icon {
+.record-btn.recording .mic-icon {
   display: none;
 }
 
-.record-btn.recording .stop-icon,
-.record-btn.hold-recording .stop-icon {
+.record-btn.recording .stop-icon {
   display: block !important;
 }
 
@@ -248,12 +240,6 @@ header h1 {
   50% { opacity: 0.3; }
 }
 
-.record-mode-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
 
 /* ===== HISTORY ===== */
 
