@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Voicebox</title>
 
   <!-- PWA -->
@@ -25,26 +25,26 @@
       </button>
     </header>
 
-    <div class="record-area">
-      <button id="btn-record" class="record-btn" aria-label="Record">
-        <div class="record-btn-inner">
-          <svg class="mic-icon" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
-          <svg class="stop-icon hidden" width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-        </div>
-      </button>
-      <div id="recording-indicator" class="recording-indicator hidden">
-        <span class="pulse-dot"></span>
-        <span class="recording-time" id="recording-time">0:00</span>
-      </div>
-      <p class="record-hint" id="record-hint">Tap to record</p>
-    </div>
-
-    <!-- History list -->
+    <!-- History list (scrollable) -->
     <div class="history-section">
       <h2>History</h2>
       <div id="history-list" class="history-list">
         <p class="empty-state" id="history-empty">No recordings yet</p>
       </div>
+    </div>
+
+    <!-- Record bar (fixed bottom quarter) -->
+    <div id="record-bar" class="record-bar">
+      <div id="recording-indicator" class="recording-indicator hidden">
+        <span class="pulse-dot"></span>
+        <span id="recording-time">0:00</span>
+        <span id="record-mode-label" class="record-mode-label"></span>
+      </div>
+      <button id="btn-record" class="record-btn" aria-label="Record">
+        <svg class="mic-icon" width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+        <svg class="stop-icon hidden" width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+        <span class="record-btn-label" id="record-btn-label">Tap or hold to record</span>
+      </button>
     </div>
   </section>
 
@@ -62,12 +62,10 @@
 
     <div class="result-content">
       <div id="result-status" class="result-status">
-        <!-- Transcribing spinner -->
         <div id="transcribing-spinner" class="spinner-wrap hidden">
           <div class="spinner"></div>
           <p>Transcribing...</p>
         </div>
-        <!-- Error -->
         <div id="transcribe-error" class="error-wrap hidden">
           <p class="error-msg" id="error-msg">Transcription failed</p>
           <button id="btn-retry" class="btn btn-accent">Retry</button>
@@ -93,6 +91,14 @@
           Share
         </button>
       </div>
+
+      <!-- Quick-share targets -->
+      <div id="quick-share" class="quick-share hidden">
+        <span class="quick-share-label">Open in:</span>
+        <button class="quick-share-btn" id="qs-claude">Claude</button>
+        <button class="quick-share-btn" id="qs-gemini">Gemini</button>
+        <button class="quick-share-btn" id="qs-chatgpt">ChatGPT</button>
+      </div>
     </div>
   </section>
 
@@ -107,6 +113,7 @@
     </header>
 
     <div class="settings-content">
+      <!-- API Key -->
       <label class="field-label" for="api-key-input">OpenAI API Key</label>
       <div class="key-input-wrap">
         <input type="password" id="api-key-input" class="text-input" placeholder="sk-..." autocomplete="off">
@@ -117,6 +124,19 @@
       <button id="btn-save-key" class="btn btn-accent settings-btn">Save Key</button>
       <button id="btn-test-key" class="btn btn-secondary settings-btn">Test Key</button>
       <p id="settings-status" class="settings-status"></p>
+
+      <!-- Custom Vocabulary -->
+      <label class="field-label" for="vocab-input">Custom Vocabulary</label>
+      <p class="field-hint">Names, terms, or words Whisper might mishear (comma-separated)</p>
+      <textarea id="vocab-input" class="text-input vocab-input" placeholder="e.g. Acme Corp, Kubernetes, LangChain" rows="3"></textarea>
+      <button id="btn-save-vocab" class="btn btn-secondary settings-btn">Save Vocabulary</button>
+
+      <!-- Storage -->
+      <div class="settings-divider"></div>
+      <label class="field-label">Storage</label>
+      <p class="field-hint" id="storage-info">Calculating...</p>
+      <p class="field-hint">Audio blobs older than 30 days are auto-deleted (transcriptions kept).</p>
+      <button id="btn-delete-all" class="btn btn-danger settings-btn">Delete All Recordings</button>
     </div>
   </section>
 

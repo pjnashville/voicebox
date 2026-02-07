@@ -1,5 +1,5 @@
 // ============================================================
-// VoiceBox — voice-to-text PWA
+// VoiceBox — voice-to-text PWA (v2)
 // ============================================================
 
 // ----- Service Worker Registration -----
@@ -7,7 +7,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/voicebox/sw.js');
 }
 
-// ----- IndexedDB (audio + metadata store) -----
+// ----- IndexedDB -----
 const DB_NAME = 'voicebox';
 const DB_VERSION = 1;
 const STORE = 'recordings';
@@ -66,16 +66,25 @@ async function dbDelete(id) {
   });
 }
 
+async function dbClear() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 // ----- Settings (localStorage) -----
-function getApiKey() {
-  return localStorage.getItem('voicebox_api_key') || '';
-}
-function setApiKey(key) {
-  localStorage.setItem('voicebox_api_key', key);
-}
+function getApiKey() { return localStorage.getItem('voicebox_api_key') || ''; }
+function setApiKey(key) { localStorage.setItem('voicebox_api_key', key); }
+function getVocab() { return localStorage.getItem('voicebox_vocab') || ''; }
+function setVocab(v) { localStorage.setItem('voicebox_vocab', v); }
 
 // ----- DOM refs -----
 const $ = (s) => document.querySelector(s);
+
 const views = {
   record: $('#view-record'),
   result: $('#view-result'),
@@ -87,7 +96,8 @@ const btnRecord = $('#btn-record');
 const btnSettings = $('#btn-settings');
 const recordingIndicator = $('#recording-indicator');
 const recordingTime = $('#recording-time');
-const recordHint = $('#record-hint');
+const recordModeLabel = $('#record-mode-label');
+const recordBtnLabel = $('#record-btn-label');
 const historyList = $('#history-list');
 const historyEmpty = $('#history-empty');
 
@@ -105,6 +115,10 @@ const resultText = $('#result-text');
 const resultDate = $('#result-date');
 const resultDuration = $('#result-duration');
 const resultActions = $('#result-actions');
+const quickShare = $('#quick-share');
+const qsClaude = $('#qs-claude');
+const qsGemini = $('#qs-gemini');
+const qsChatgpt = $('#qs-chatgpt');
 
 // Settings view
 const btnSettingsBack = $('#btn-settings-back');
@@ -113,6 +127,10 @@ const btnTestKey = $('#btn-test-key');
 const btnToggleKey = $('#btn-toggle-key');
 const apiKeyInput = $('#api-key-input');
 const settingsStatus = $('#settings-status');
+const vocabInput = $('#vocab-input');
+const btnSaveVocab = $('#btn-save-vocab');
+const storageInfo = $('#storage-info');
+const btnDeleteAll = $('#btn-delete-all');
 
 // ----- View navigation -----
 let currentView = 'record';
@@ -121,7 +139,6 @@ function showView(name) {
   views[currentView]?.classList.remove('active');
   views[name]?.classList.add('active');
   currentView = name;
-  window.scrollTo(0, 0);
 }
 
 // ----- Toast -----
@@ -135,24 +152,65 @@ function toast(msg) {
   }
   el.textContent = msg;
   clearTimeout(toastTimer);
-  // Force reflow for re-trigger
   el.classList.remove('show');
   void el.offsetWidth;
   el.classList.add('show');
   toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
 }
 
-// ----- Recording state -----
-let mediaRecorder = null;
-let audioChunks = [];
-let recordingStartTime = 0;
-let timerInterval = null;
+// ----- Clipboard helper -----
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Fallback for older browsers
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    return true;
+  }
+}
 
+// ----- Formatting -----
 function formatDuration(seconds) {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ============================================================
+// RECORDING — hold-to-record + tap-to-toggle
+// ============================================================
+
+let mediaRecorder = null;
+let audioChunks = [];
+let recordingStartTime = 0;
+let timerInterval = null;
+
+// Hold vs tap detection
+const HOLD_THRESHOLD = 300; // ms
+let pointerDownTime = 0;
+let isHoldMode = false;
+let holdTimer = null;
 
 function startTimer() {
   recordingStartTime = Date.now();
@@ -168,12 +226,12 @@ function stopTimer() {
   timerInterval = null;
 }
 
-async function startRecording() {
+async function startRecording(holdMode) {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioChunks = [];
+    isHoldMode = holdMode;
 
-    // Prefer webm/opus, fall back to whatever the browser supports
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
       ? 'audio/webm;codecs=opus'
       : MediaRecorder.isTypeSupported('audio/mp4')
@@ -193,10 +251,18 @@ async function startRecording() {
       await saveAndTranscribe(blob, duration);
     };
 
-    mediaRecorder.start(250); // collect in 250ms chunks
-    btnRecord.classList.add('recording');
+    mediaRecorder.start(250);
+
+    if (holdMode) {
+      btnRecord.classList.add('hold-recording');
+      recordModeLabel.textContent = 'Hold mode — release to stop';
+      recordBtnLabel.textContent = 'Release to stop';
+    } else {
+      btnRecord.classList.add('recording');
+      recordModeLabel.textContent = 'Tap mode — tap to stop';
+      recordBtnLabel.textContent = 'Tap to stop';
+    }
     recordingIndicator.classList.remove('hidden');
-    recordHint.textContent = 'Tap to stop';
     startTimer();
   } catch (err) {
     toast('Microphone access denied');
@@ -207,25 +273,68 @@ function stopRecording() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();
   }
-  btnRecord.classList.remove('recording');
+  btnRecord.classList.remove('recording', 'hold-recording');
   recordingIndicator.classList.add('hidden');
-  recordHint.textContent = 'Tap to record';
+  recordBtnLabel.textContent = 'Tap or hold to record';
+  recordModeLabel.textContent = '';
   stopTimer();
 }
 
-btnRecord.addEventListener('click', () => {
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
+function isRecording() {
+  return mediaRecorder && mediaRecorder.state === 'recording';
+}
+
+// Pointer events for hold/tap detection
+btnRecord.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  if (isRecording()) return; // will be handled by pointerup
+  pointerDownTime = Date.now();
+  holdTimer = setTimeout(() => {
+    // Held long enough — start in hold mode
+    if (!isRecording()) {
+      startRecording(true);
+    }
+  }, HOLD_THRESHOLD);
+});
+
+btnRecord.addEventListener('pointerup', (e) => {
+  e.preventDefault();
+  clearTimeout(holdTimer);
+  const pressDuration = Date.now() - pointerDownTime;
+
+  if (isRecording()) {
+    if (isHoldMode) {
+      // Release from hold → stop
+      stopRecording();
+    } else {
+      // Tap while in tap-mode recording → stop
+      stopRecording();
+    }
+  } else if (pressDuration < HOLD_THRESHOLD) {
+    // Quick tap — toggle on in tap mode
+    startRecording(false);
+  }
+  // If pressDuration >= HOLD_THRESHOLD and recording hasn't started yet,
+  // that means startRecording was called in the timeout above — do nothing
+});
+
+btnRecord.addEventListener('pointercancel', () => {
+  clearTimeout(holdTimer);
+  if (isRecording() && isHoldMode) {
     stopRecording();
-  } else {
-    startRecording();
   }
 });
 
-// ----- Save & Transcribe flow -----
+// Prevent context menu on long press
+btnRecord.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// ============================================================
+// SAVE & TRANSCRIBE
+// ============================================================
+
 let activeRecordId = null;
 
 async function saveAndTranscribe(blob, duration) {
-  // 1. Save audio to IndexedDB FIRST — never lose audio
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const record = {
     id,
@@ -233,21 +342,17 @@ async function saveAndTranscribe(blob, duration) {
     duration,
     mimeType: blob.type,
     audio: blob,
-    status: 'pending',   // pending | done | error
+    status: 'pending',
     text: '',
     error: '',
   };
   await dbPut(record);
 
-  // 2. Show result view with spinner
   activeRecordId = id;
   showResultView(record);
   showView('result');
-
-  // 3. Refresh the history list in the background
   renderHistory();
 
-  // 4. Attempt transcription
   await transcribe(id);
 }
 
@@ -265,16 +370,19 @@ async function transcribe(id) {
     return;
   }
 
-  // Show spinner
   if (activeRecordId === id) {
     transcribingSpinner.classList.remove('hidden');
     transcribeError.classList.add('hidden');
     resultTextWrap.classList.add('hidden');
     resultActions.classList.add('hidden');
+    quickShare.classList.add('hidden');
   }
 
   try {
-    // Determine file extension from mime
+    if (!record.audio) {
+      throw new Error('Audio blob was cleaned up. Transcription unavailable.');
+    }
+
     let ext = 'webm';
     if (record.mimeType.includes('mp4')) ext = 'mp4';
     else if (record.mimeType.includes('ogg')) ext = 'ogg';
@@ -283,6 +391,12 @@ async function transcribe(id) {
     const formData = new FormData();
     formData.append('file', record.audio, `recording.${ext}`);
     formData.append('model', 'whisper-1');
+
+    // Add custom vocabulary as prompt for better accuracy
+    const vocab = getVocab();
+    if (vocab.trim()) {
+      formData.append('prompt', vocab.trim());
+    }
 
     const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
@@ -309,98 +423,50 @@ async function transcribe(id) {
   await dbPut(record);
   if (activeRecordId === id) showResultView(record);
   renderHistory();
+
+  // Auto-copy on successful transcription
+  if (record.status === 'done' && record.text) {
+    await copyText(record.text);
+    toast('Copied!');
+  }
 }
 
-// ----- Result view rendering -----
+// ============================================================
+// RESULT VIEW
+// ============================================================
+
 function showResultView(record) {
-  // Meta
   resultDate.textContent = new Date(record.timestamp).toLocaleString();
   resultDuration.textContent = formatDuration(record.duration);
 
-  // Reset states
   transcribingSpinner.classList.add('hidden');
   transcribeError.classList.add('hidden');
   resultTextWrap.classList.add('hidden');
   resultActions.classList.add('hidden');
+  quickShare.classList.add('hidden');
 
   if (record.status === 'pending') {
     transcribingSpinner.classList.remove('hidden');
   } else if (record.status === 'error') {
     transcribeError.classList.remove('hidden');
     errorMsg.textContent = record.error || 'Transcription failed';
-    // Still show text area if there was a previous partial result
     if (record.text) {
       resultTextWrap.classList.remove('hidden');
       resultText.value = record.text;
       resultActions.classList.remove('hidden');
+      quickShare.classList.remove('hidden');
     }
   } else if (record.status === 'done') {
     resultTextWrap.classList.remove('hidden');
     resultText.value = record.text;
     resultActions.classList.remove('hidden');
+    quickShare.classList.remove('hidden');
   }
 }
 
-// ----- History rendering -----
-async function renderHistory() {
-  const records = await dbGetAll();
-  records.sort((a, b) => b.timestamp - a.timestamp);
-
-  if (records.length === 0) {
-    historyEmpty.classList.remove('hidden');
-    // Remove any items but keep the empty state
-    historyList.querySelectorAll('.history-item').forEach((el) => el.remove());
-    return;
-  }
-
-  historyEmpty.classList.add('hidden');
-  // Clear old items
-  historyList.querySelectorAll('.history-item').forEach((el) => el.remove());
-
-  for (const rec of records) {
-    const el = document.createElement('div');
-    el.className = 'history-item';
-    el.dataset.id = rec.id;
-
-    const iconClass = rec.status === 'done' ? 'done' : rec.status === 'error' ? 'failed' : 'pending';
-    const iconSymbol = rec.status === 'done' ? '\u2713' : rec.status === 'error' ? '!' : '\u25CF';
-    const preview = rec.status === 'done'
-      ? (rec.text.slice(0, 60) + (rec.text.length > 60 ? '...' : ''))
-      : rec.status === 'error'
-        ? 'Transcription failed'
-        : 'Pending transcription';
-
-    el.innerHTML = `
-      <div class="history-item-icon ${iconClass}">${iconSymbol}</div>
-      <div class="history-item-body">
-        <div class="history-item-text">${escapeHtml(preview)}</div>
-        <div class="history-item-meta">${new Date(rec.timestamp).toLocaleString()} &middot; ${formatDuration(rec.duration)}</div>
-      </div>
-      <div class="history-item-arrow">&rsaquo;</div>
-    `;
-
-    el.addEventListener('click', () => openRecord(rec.id));
-    historyList.appendChild(el);
-  }
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-async function openRecord(id) {
-  const record = await dbGet(id);
-  if (!record) return;
-  activeRecordId = id;
-  showResultView(record);
-  showView('result');
-}
-
-// ----- Result view actions -----
 btnResultBack.addEventListener('click', () => {
   activeRecordId = null;
+  stopPlayback();
   showView('record');
 });
 
@@ -426,36 +492,324 @@ btnDelete.addEventListener('click', async () => {
 });
 
 btnCopy.addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(resultText.value);
-    toast('Copied to clipboard');
-  } catch {
-    // Fallback
-    resultText.select();
-    document.execCommand('copy');
-    toast('Copied to clipboard');
-  }
+  await copyText(resultText.value);
+  toast('Copied to clipboard');
 });
 
 btnShare.addEventListener('click', async () => {
   if (navigator.share) {
     try {
       await navigator.share({ text: resultText.value });
-    } catch {
-      // User cancelled — no-op
-    }
+    } catch { /* user cancelled */ }
   } else {
-    // Fallback to copy
-    await navigator.clipboard.writeText(resultText.value);
+    await copyText(resultText.value);
     toast('Copied (sharing not supported on this device)');
   }
 });
 
-// ----- Settings -----
+// ============================================================
+// QUICK SHARE TARGETS
+// ============================================================
+
+function openWithText(url) {
+  copyText(resultText.value).then(() => {
+    toast('Copied! Opening app...');
+    setTimeout(() => { window.open(url, '_blank'); }, 300);
+  });
+}
+
+qsClaude.addEventListener('click', () => {
+  // Try Claude app universal link, fall back to web
+  openWithText('https://claude.ai/new');
+});
+
+qsGemini.addEventListener('click', () => {
+  openWithText('https://gemini.google.com/app');
+});
+
+qsChatgpt.addEventListener('click', () => {
+  openWithText('https://chatgpt.com/');
+});
+
+// ============================================================
+// AUDIO PLAYBACK (in history items)
+// ============================================================
+
+let currentAudio = null;
+let currentPlayBtn = null;
+let playAnimFrame = null;
+
+function stopPlayback() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    currentAudio = null;
+  }
+  if (currentPlayBtn) {
+    updatePlayBtnIcon(currentPlayBtn, false);
+    resetProgressRing(currentPlayBtn);
+    currentPlayBtn = null;
+  }
+  cancelAnimationFrame(playAnimFrame);
+}
+
+function updatePlayBtnIcon(btn, isPlaying) {
+  const svg = btn.querySelector('.play-pause-icon');
+  if (!svg) return;
+  if (isPlaying) {
+    svg.innerHTML = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
+  } else {
+    svg.innerHTML = '<polygon points="6,4 20,12 6,20"/>';
+  }
+}
+
+function resetProgressRing(btn) {
+  const fg = btn.querySelector('.ring-fg');
+  if (fg) fg.style.strokeDashoffset = fg.getAttribute('data-circumference');
+}
+
+function updateProgressRing(btn, progress) {
+  const fg = btn.querySelector('.ring-fg');
+  if (!fg) return;
+  const c = parseFloat(fg.getAttribute('data-circumference'));
+  fg.style.strokeDashoffset = c - (c * progress);
+}
+
+async function togglePlayback(recordId, btn) {
+  // If same button is playing, pause it
+  if (currentPlayBtn === btn && currentAudio && !currentAudio.paused) {
+    currentAudio.pause();
+    updatePlayBtnIcon(btn, false);
+    cancelAnimationFrame(playAnimFrame);
+    return;
+  }
+
+  // If different audio is playing, stop it
+  stopPlayback();
+
+  const record = await dbGet(recordId);
+  if (!record || !record.audio) {
+    toast('Audio not available');
+    return;
+  }
+
+  const url = URL.createObjectURL(record.audio);
+  currentAudio = new Audio(url);
+  currentPlayBtn = btn;
+
+  currentAudio.addEventListener('ended', () => {
+    URL.revokeObjectURL(url);
+    updatePlayBtnIcon(btn, false);
+    resetProgressRing(btn);
+    currentAudio = null;
+    currentPlayBtn = null;
+  });
+
+  currentAudio.addEventListener('error', () => {
+    URL.revokeObjectURL(url);
+    toast('Playback error');
+    stopPlayback();
+  });
+
+  updatePlayBtnIcon(btn, true);
+  currentAudio.play();
+
+  // Animate progress ring
+  function animateRing() {
+    if (!currentAudio || currentAudio.paused) return;
+    if (currentAudio.duration && isFinite(currentAudio.duration)) {
+      updateProgressRing(btn, currentAudio.currentTime / currentAudio.duration);
+    }
+    playAnimFrame = requestAnimationFrame(animateRing);
+  }
+  animateRing();
+}
+
+// ============================================================
+// HISTORY — render + swipe-to-delete
+// ============================================================
+
+async function renderHistory() {
+  const records = await dbGetAll();
+  records.sort((a, b) => b.timestamp - a.timestamp);
+
+  // Clear old items
+  historyList.querySelectorAll('.history-item-wrap').forEach((el) => el.remove());
+
+  if (records.length === 0) {
+    historyEmpty.classList.remove('hidden');
+    return;
+  }
+
+  historyEmpty.classList.add('hidden');
+
+  for (const rec of records) {
+    const wrap = document.createElement('div');
+    wrap.className = 'history-item-wrap';
+    wrap.dataset.id = rec.id;
+
+    // Swipe-to-delete background
+    const delBg = document.createElement('div');
+    delBg.className = 'history-item-delete-bg';
+    delBg.textContent = 'Delete';
+    wrap.appendChild(delBg);
+
+    const el = document.createElement('div');
+    el.className = 'history-item';
+
+    const iconClass = rec.status === 'done' ? 'done' : rec.status === 'error' ? 'failed' : 'pending';
+    const iconSymbol = rec.status === 'done' ? '\u2713' : rec.status === 'error' ? '!' : '\u25CF';
+    const preview = rec.status === 'done'
+      ? (rec.text.slice(0, 50) + (rec.text.length > 50 ? '...' : ''))
+      : rec.status === 'error'
+        ? 'Transcription failed'
+        : 'Pending transcription';
+
+    const hasAudio = !!rec.audio;
+    const circumference = Math.PI * 2 * 14.5; // radius for 36px button with 2.5px stroke
+
+    el.innerHTML = `
+      <div class="history-item-icon ${iconClass}">${iconSymbol}</div>
+      <div class="history-item-body">
+        <div class="history-item-text">${escapeHtml(preview)}</div>
+        <div class="history-item-meta">${new Date(rec.timestamp).toLocaleString()} &middot; ${formatDuration(rec.duration)}</div>
+      </div>
+      ${hasAudio ? `<button class="history-play-btn" data-id="${rec.id}" aria-label="Play">
+        <svg class="play-progress-ring" viewBox="0 0 36 36">
+          <circle class="ring-bg" cx="18" cy="18" r="14.5"/>
+          <circle class="ring-fg" cx="18" cy="18" r="14.5"
+            stroke-dasharray="${circumference}"
+            stroke-dashoffset="${circumference}"
+            data-circumference="${circumference}"/>
+        </svg>
+        <svg class="play-pause-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>
+      </button>` : ''}
+      <div class="history-item-arrow">&rsaquo;</div>
+    `;
+
+    wrap.appendChild(el);
+    historyList.appendChild(wrap);
+
+    // Play button click (stop propagation so it doesn't open the record)
+    const playBtn = el.querySelector('.history-play-btn');
+    if (playBtn) {
+      playBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePlayback(rec.id, playBtn);
+      });
+    }
+
+    // Tap to open record detail
+    el.addEventListener('click', () => openRecord(rec.id));
+
+    // Swipe-to-delete
+    setupSwipeToDelete(wrap, el, rec.id);
+  }
+}
+
+function setupSwipeToDelete(wrap, el, id) {
+  let startX = 0;
+  let currentX = 0;
+  let swiping = false;
+
+  el.addEventListener('touchstart', (e) => {
+    startX = e.touches[0].clientX;
+    currentX = startX;
+    swiping = true;
+    el.style.transition = 'none';
+  }, { passive: true });
+
+  el.addEventListener('touchmove', (e) => {
+    if (!swiping) return;
+    currentX = e.touches[0].clientX;
+    const dx = Math.min(0, currentX - startX); // only left swipe
+    el.style.transform = `translateX(${dx}px)`;
+  }, { passive: true });
+
+  el.addEventListener('touchend', async () => {
+    if (!swiping) return;
+    swiping = false;
+    el.style.transition = 'transform 0.2s ease';
+    const dx = currentX - startX;
+    if (dx < -80) {
+      // Swiped far enough — delete
+      el.style.transform = `translateX(-100%)`;
+      setTimeout(async () => {
+        await dbDelete(id);
+        renderHistory();
+        toast('Recording deleted');
+      }, 200);
+    } else {
+      el.style.transform = 'translateX(0)';
+    }
+  });
+}
+
+async function openRecord(id) {
+  const record = await dbGet(id);
+  if (!record) return;
+  stopPlayback();
+  activeRecordId = id;
+  showResultView(record);
+  showView('result');
+}
+
+// ============================================================
+// STORAGE MANAGEMENT
+// ============================================================
+
+const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+
+async function cleanupOldAudio() {
+  const records = await dbGetAll();
+  const cutoff = Date.now() - THIRTY_DAYS;
+  let cleaned = 0;
+
+  for (const rec of records) {
+    if (rec.audio && rec.timestamp < cutoff) {
+      rec.audio = null; // Remove blob but keep text
+      await dbPut(rec);
+      cleaned++;
+    }
+  }
+
+  if (cleaned > 0) {
+    console.log(`Cleaned audio from ${cleaned} recordings older than 30 days`);
+  }
+}
+
+async function calculateStorage() {
+  const records = await dbGetAll();
+  let totalBytes = 0;
+  let count = 0;
+
+  for (const rec of records) {
+    count++;
+    if (rec.audio) {
+      totalBytes += rec.audio.size || 0;
+    }
+    // Estimate text size
+    totalBytes += (rec.text?.length || 0) * 2;
+  }
+
+  return { count, totalBytes };
+}
+
+async function updateStorageInfo() {
+  const { count, totalBytes } = await calculateStorage();
+  storageInfo.textContent = `${count} recording${count !== 1 ? 's' : ''} — ${formatBytes(totalBytes)} used`;
+}
+
+// ============================================================
+// SETTINGS
+// ============================================================
+
 btnSettings.addEventListener('click', () => {
   apiKeyInput.value = getApiKey();
+  vocabInput.value = getVocab();
   settingsStatus.textContent = '';
   settingsStatus.className = 'settings-status';
+  updateStorageInfo();
   showView('settings');
 });
 
@@ -474,6 +828,12 @@ btnSaveKey.addEventListener('click', () => {
   settingsStatus.className = 'settings-status success';
 });
 
+btnSaveVocab.addEventListener('click', () => {
+  setVocab(vocabInput.value);
+  settingsStatus.textContent = 'Vocabulary saved';
+  settingsStatus.className = 'settings-status success';
+});
+
 btnTestKey.addEventListener('click', async () => {
   const key = apiKeyInput.value.trim();
   if (!key) {
@@ -486,13 +846,11 @@ btnTestKey.addEventListener('click', async () => {
   settingsStatus.className = 'settings-status';
 
   try {
-    // Create a tiny silent audio blob to test the key
     const sampleRate = 16000;
-    const numSamples = sampleRate; // 1 second
+    const numSamples = sampleRate;
     const buffer = new ArrayBuffer(44 + numSamples * 2);
     const view = new DataView(buffer);
 
-    // WAV header
     const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
     writeStr(0, 'RIFF');
     view.setUint32(4, 36 + numSamples * 2, true);
@@ -507,7 +865,6 @@ btnTestKey.addEventListener('click', async () => {
     view.setUint16(34, 16, true);
     writeStr(36, 'data');
     view.setUint32(40, numSamples * 2, true);
-    // Samples stay silent (zeros)
 
     const testBlob = new Blob([buffer], { type: 'audio/wav' });
     const formData = new FormData();
@@ -525,8 +882,7 @@ btnTestKey.addEventListener('click', async () => {
       settingsStatus.className = 'settings-status success';
     } else {
       const body = await resp.json().catch(() => ({}));
-      const msg = body.error?.message || `Error ${resp.status}`;
-      settingsStatus.textContent = msg;
+      settingsStatus.textContent = body.error?.message || `Error ${resp.status}`;
       settingsStatus.className = 'settings-status error';
     }
   } catch (err) {
@@ -535,5 +891,17 @@ btnTestKey.addEventListener('click', async () => {
   }
 });
 
-// ----- Init -----
-renderHistory();
+btnDeleteAll.addEventListener('click', async () => {
+  if (!confirm('Delete ALL recordings? This cannot be undone.')) return;
+  await dbClear();
+  stopPlayback();
+  renderHistory();
+  updateStorageInfo();
+  toast('All recordings deleted');
+});
+
+// ============================================================
+// INIT
+// ============================================================
+
+cleanupOldAudio().then(() => renderHistory());
