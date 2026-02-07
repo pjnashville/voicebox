@@ -120,6 +120,7 @@ const btnSettings = $('#btn-settings');
 const recordingIndicator = $('#recording-indicator');
 const recordingTime = $('#recording-time');
 const recordBtnLabel = $('#record-btn-label');
+const kittBar = $('#kitt-bar');
 const historyList = $('#history-list');
 const historyEmpty = $('#history-empty');
 const btnClearAll = $('#btn-clear-all');
@@ -309,6 +310,7 @@ async function startRecording() {
     btnRecord.classList.add('recording');
     recordBtnLabel.textContent = 'Tap to stop';
     recordingIndicator.classList.remove('hidden');
+    kittBar.classList.remove('hidden');
     startTimer();
   } catch (err) {
     toast('Microphone access denied');
@@ -321,6 +323,7 @@ function stopRecording() {
   }
   btnRecord.classList.remove('recording');
   recordingIndicator.classList.add('hidden');
+  kittBar.classList.add('hidden');
   recordBtnLabel.textContent = 'Tap to record';
   stopTimer();
 }

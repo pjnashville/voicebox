@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
 
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 
@@ -38,6 +38,11 @@
 
     <!-- Record bar (fixed bottom quarter) -->
     <div id="record-bar" class="record-bar">
+      <div id="kitt-bar" class="kitt-bar hidden">
+        <div class="kitt-track">
+          <div class="kitt-light"></div>
+        </div>
+      </div>
       <div id="recording-indicator" class="recording-indicator hidden">
         <span class="pulse-dot"></span>
         <span id="recording-time">0:00</span>
@@ -136,6 +141,6 @@
     </div>
   </section>
 
-  <script type="module" src="app.js?v=11"></script>
+  <script type="module" src="app.js?v=12"></script>
 </body>
 </html>
