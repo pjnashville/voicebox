@@ -92,7 +92,7 @@ const APP_TARGETS = [
   { id: 'grok',     name: 'Grok',     url: 'grok://' },
   { id: 'notes',    name: 'Notes',    url: 'mobilenotes://' },
   { id: 'obsidian', name: 'Obsidian', url: 'obsidian://' },
-  { id: 'none',     name: 'None',     url: null },
+  { id: 'none',     name: 'Clipboard', url: null },
 ];
 
 // ----- DOM refs -----
@@ -199,8 +199,9 @@ function setupDeferredClipboard() {
     return false;
   }
   try {
+    let newResolve;
     const textPromise = new Promise((resolve) => {
-      pendingClipboardResolve = resolve;
+      newResolve = resolve;
     });
     navigator.clipboard.write([
       new ClipboardItem({
@@ -209,9 +210,11 @@ function setupDeferredClipboard() {
         ),
       }),
     ]);
+    // Only update resolve if write() didn't throw
+    pendingClipboardResolve = newResolve;
     return true;
   } catch {
-    pendingClipboardResolve = null;
+    // Don't null out existing resolve — keep earlier setup (e.g. from pointerdown)
     return false;
   }
 }
@@ -334,6 +337,9 @@ function isRecording() {
 // Pointer events for hold/tap detection
 btnRecord.addEventListener('pointerdown', (e) => {
   e.preventDefault();
+  // Set up deferred clipboard early — pointerdown is the strongest user gesture
+  // on iOS Safari, especially for hold-to-record where pointerup may not qualify
+  setupDeferredClipboard();
   if (isRecording()) return; // will be handled by pointerup
   pointerDownTime = Date.now();
   holdTimer = setTimeout(() => {
@@ -393,29 +399,16 @@ async function saveAndTranscribe(blob, duration) {
   };
   await dbPut(record);
 
-  const targetId = getTargetApp();
-  const target = APP_TARGETS.find((a) => a.id === targetId);
-  const hasAppTarget = target && target.url;
+  // Stay on record view — never show result screen after recording.
+  // User can tap history items to see transcriptions.
+  renderHistory();
+  toast('Transcribing...');
+  await transcribe(id);
 
-  if (hasAppTarget) {
-    // Skip result screen — stay on record view, transcribe in background
-    renderHistory();
-    toast('Transcribing...');
-    await transcribe(id);
-    // On error, navigate to result view so user can retry
-    const updated = await dbGet(id);
-    if (updated && updated.status === 'error') {
-      activeRecordId = id;
-      showResultView(updated);
-      showView('result');
-    }
-  } else {
-    // No app target — show result view as usual
-    activeRecordId = id;
-    showResultView(record);
-    showView('result');
-    renderHistory();
-    await transcribe(id);
+  // Show error toast if transcription failed
+  const updated = await dbGet(id);
+  if (updated && updated.status === 'error') {
+    toast(updated.error || 'Transcription failed');
   }
 }
 
@@ -488,10 +481,10 @@ async function transcribe(id) {
 
   // Auto-copy on successful transcription + auto-launch app
   if (record.status === 'done' && record.text) {
-    // Resolve deferred clipboard (set up in user gesture), fall back to direct copy
-    if (!resolveDeferredClipboard(record.text)) {
-      await copyText(record.text);
-    }
+    // Try both: deferred clipboard (iOS Safari) and direct copy (other browsers).
+    // One or both may succeed depending on user gesture timing.
+    resolveDeferredClipboard(record.text);
+    await copyText(record.text);
     const targetId = getTargetApp();
     const target = APP_TARGETS.find((a) => a.id === targetId);
     if (target && target.url) {
