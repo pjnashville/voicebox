@@ -347,8 +347,22 @@ let mediaRecorder = null;
 let audioChunks = [];
 let recordingStartTime = 0;
 let timerInterval = null;
+let wakeLock = null;
 
-// Tap-to-toggle recording
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch { /* silently ignore */ }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+}
 
 function startTimer() {
   recordingStartTime = Date.now();
@@ -394,6 +408,7 @@ async function startRecording() {
     recordingIndicator.classList.remove('hidden');
     startKitt();
     startTimer();
+    requestWakeLock();
   } catch (err) {
     toast('Microphone access denied');
   }
@@ -408,6 +423,7 @@ function stopRecording() {
   stopKitt();
   recordBtnLabel.textContent = 'Tap to record';
   stopTimer();
+  releaseWakeLock();
 }
 
 function isRecording() {
