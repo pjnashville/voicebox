@@ -81,6 +81,19 @@ function getApiKey() { return localStorage.getItem('voicebox_api_key') || ''; }
 function setApiKey(key) { localStorage.setItem('voicebox_api_key', key); }
 function getVocab() { return localStorage.getItem('voicebox_vocab') || ''; }
 function setVocab(v) { localStorage.setItem('voicebox_vocab', v); }
+function getTargetApp() { return localStorage.getItem('voicebox_target_app') || 'none'; }
+function setTargetApp(id) { localStorage.setItem('voicebox_target_app', id); }
+
+// ----- App targets for auto-launch -----
+const APP_TARGETS = [
+  { id: 'claude',   name: 'Claude',   url: 'claude://' },
+  { id: 'chatgpt',  name: 'ChatGPT',  url: 'chatgpt://' },
+  { id: 'gemini',   name: 'Gemini',   url: 'googlegemini://' },
+  { id: 'grok',     name: 'Grok',     url: 'grok://' },
+  { id: 'notes',    name: 'Notes',    url: 'mobilenotes://' },
+  { id: 'obsidian', name: 'Obsidian', url: 'obsidian://' },
+  { id: 'none',     name: 'None',     url: null },
+];
 
 // ----- DOM refs -----
 const $ = (s) => document.querySelector(s);
@@ -115,10 +128,7 @@ const resultText = $('#result-text');
 const resultDate = $('#result-date');
 const resultDuration = $('#result-duration');
 const resultActions = $('#result-actions');
-const quickShare = $('#quick-share');
-const qsClaude = $('#qs-claude');
-const qsGemini = $('#qs-gemini');
-const qsChatgpt = $('#qs-chatgpt');
+const appSelectorEl = $('#app-selector');
 
 // Settings view
 const btnSettingsBack = $('#btn-settings-back');
@@ -375,7 +385,6 @@ async function transcribe(id) {
     transcribeError.classList.add('hidden');
     resultTextWrap.classList.add('hidden');
     resultActions.classList.add('hidden');
-    quickShare.classList.add('hidden');
   }
 
   try {
@@ -424,10 +433,17 @@ async function transcribe(id) {
   if (activeRecordId === id) showResultView(record);
   renderHistory();
 
-  // Auto-copy on successful transcription
+  // Auto-copy on successful transcription + auto-launch app
   if (record.status === 'done' && record.text) {
     await copyText(record.text);
-    toast('Copied!');
+    const targetId = getTargetApp();
+    const target = APP_TARGETS.find((a) => a.id === targetId);
+    if (target && target.url) {
+      toast(`Copied! Opening ${target.name}...`);
+      setTimeout(() => { window.location.href = target.url; }, 400);
+    } else {
+      toast('Copied!');
+    }
   }
 }
 
@@ -443,7 +459,6 @@ function showResultView(record) {
   transcribeError.classList.add('hidden');
   resultTextWrap.classList.add('hidden');
   resultActions.classList.add('hidden');
-  quickShare.classList.add('hidden');
 
   if (record.status === 'pending') {
     transcribingSpinner.classList.remove('hidden');
@@ -454,13 +469,11 @@ function showResultView(record) {
       resultTextWrap.classList.remove('hidden');
       resultText.value = record.text;
       resultActions.classList.remove('hidden');
-      quickShare.classList.remove('hidden');
     }
   } else if (record.status === 'done') {
     resultTextWrap.classList.remove('hidden');
     resultText.value = record.text;
     resultActions.classList.remove('hidden');
-    quickShare.classList.remove('hidden');
   }
 }
 
@@ -508,28 +521,28 @@ btnShare.addEventListener('click', async () => {
 });
 
 // ============================================================
-// QUICK SHARE TARGETS
+// APP SELECTOR (auto-launch target)
 // ============================================================
 
-function openWithText(url) {
-  copyText(resultText.value).then(() => {
-    toast('Copied! Opening app...');
-    setTimeout(() => { window.open(url, '_blank'); }, 300);
-  });
+function initAppSelector() {
+  const saved = getTargetApp();
+  appSelectorEl.innerHTML = '';
+
+  for (const app of APP_TARGETS) {
+    const pill = document.createElement('button');
+    pill.className = 'app-pill' + (app.id === saved ? ' active' : '');
+    pill.textContent = app.name;
+    pill.dataset.app = app.id;
+
+    pill.addEventListener('click', () => {
+      appSelectorEl.querySelectorAll('.app-pill').forEach((p) => p.classList.remove('active'));
+      pill.classList.add('active');
+      setTargetApp(app.id);
+    });
+
+    appSelectorEl.appendChild(pill);
+  }
 }
-
-qsClaude.addEventListener('click', () => {
-  // Try Claude app universal link, fall back to web
-  openWithText('https://claude.ai/new');
-});
-
-qsGemini.addEventListener('click', () => {
-  openWithText('https://gemini.google.com/app');
-});
-
-qsChatgpt.addEventListener('click', () => {
-  openWithText('https://chatgpt.com/');
-});
 
 // ============================================================
 // AUDIO PLAYBACK (in history items)
@@ -904,4 +917,5 @@ btnDeleteAll.addEventListener('click', async () => {
 // INIT
 // ============================================================
 
+initAppSelector();
 cleanupOldAudio().then(() => renderHistory());

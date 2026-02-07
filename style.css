@@ -534,36 +534,42 @@ header h1 {
   flex: 1;
 }
 
-/* ===== QUICK SHARE ===== */
+/* ===== APP SELECTOR ===== */
 
-.quick-share {
+.app-selector {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
   flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0 0.25rem;
 }
 
-.quick-share-label {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-right: 0.25rem;
-}
-
-.quick-share-btn {
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--border);
+.app-pill {
+  padding: 0.5rem 0.875rem;
+  min-height: 40px;
+  border: 1.5px solid var(--border);
   border-radius: 999px;
-  background: var(--surface);
-  color: var(--text);
+  background: var(--surface2);
+  color: var(--text-muted);
   font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.quick-share-btn:active {
-  background: var(--surface2);
+.app-pill:active {
+  background: var(--border);
+}
+
+.app-pill.active {
+  border-color: var(--primary);
+  background: rgba(67, 97, 238, 0.15);
+  color: #fff;
 }
 
 /* ===== SETTINGS ===== */
