@@ -4,7 +4,7 @@
 
 // ----- Service Worker Registration -----
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
+  navigator.serviceWorker.register('/voicebox/sw.js');
 }
 
 // ----- IndexedDB (audio + metadata store) -----

@@ -1,7 +1,8 @@
 {
   "name": "Voicebox",
   "short_name": "Voicebox",
-  "start_url": "/",
+  "start_url": "/voicebox/",
+  "scope": "/voicebox/",
   "display": "standalone",
   "background_color": "#0f0f1a",
   "theme_color": "#0f0f1a",
