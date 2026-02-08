@@ -238,7 +238,7 @@ header h1 {
   flex-direction: column;
   align-items: center;
   gap: 0;
-  padding: 0.75rem 1rem;
+  padding: 0 1rem;
   padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
   background: var(--surface);
   border-top: 1px solid var(--border);
@@ -246,7 +246,7 @@ header h1 {
 
 .record-btn {
   width: 100%;
-  margin-top: 0.5rem;
+  margin-top: 0.25rem;
   min-height: 25dvh;
   border-radius: var(--radius);
   border: none;
@@ -382,7 +382,7 @@ header h1 {
   gap: 0.5rem;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.25rem;
 }
 
 .empty-state {
@@ -943,6 +943,96 @@ header h1 {
     opacity: 1;
     box-shadow: 0 0 20px 8px rgba(255, 255, 255, 0.4);
   }
+}
+
+/* ===== MATRIX RAIN (clear-all animation) ===== */
+
+.matrix-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.matrix-column {
+  position: absolute;
+  top: -100%;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.1;
+  color: #0f0;
+  text-shadow: 0 0 8px #0f0, 0 0 4px #0a0;
+  animation: matrix-fall linear forwards;
+  white-space: nowrap;
+}
+
+@keyframes matrix-fall {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(calc(200vh + 100%)); }
+}
+
+.matrix-char-bright {
+  color: #fff;
+  text-shadow: 0 0 10px #0f0, 0 0 20px #0f0, 0 0 4px #fff;
+}
+
+/* Glitch effect on history items */
+.history-item-wrap.glitching .history-item-text {
+  font-family: 'Courier New', monospace;
+  color: #0f0;
+  text-shadow: 0 0 6px #0f0;
+  animation: glitch-text 0.1s steps(2) infinite;
+}
+
+@keyframes glitch-text {
+  0% { opacity: 1; transform: translateX(0); }
+  25% { opacity: 0.8; transform: translateX(-2px); }
+  50% { opacity: 1; transform: translateX(1px); }
+  75% { opacity: 0.9; transform: translateX(-1px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+/* ===== CRT SCANLINE MATERIALIZE (new history items) ===== */
+
+.history-item-wrap.crt-materialize {
+  overflow: hidden;
+  animation: crt-scanline-in 0.35s ease-out forwards;
+}
+
+.history-item-wrap.crt-materialize .history-item {
+  animation: crt-scanline-reveal 0.35s ease-out forwards;
+  box-shadow: 0 0 15px 3px rgba(46, 204, 113, 0.35), inset 0 1px 0 rgba(46, 204, 113, 0.2);
+  border-color: rgba(46, 204, 113, 0.5);
+  transition: box-shadow 0.5s ease-out, border-color 0.5s ease-out;
+}
+
+@keyframes crt-scanline-in {
+  0% {
+    clip-path: inset(0 0 100% 0);
+    filter: brightness(1.6);
+  }
+  60% {
+    clip-path: inset(0 0 0% 0);
+    filter: brightness(1.3);
+  }
+  100% {
+    clip-path: inset(0 0 0% 0);
+    filter: brightness(1);
+  }
+}
+
+@keyframes crt-scanline-reveal {
+  0% { background: rgba(46, 204, 113, 0.15); }
+  40% { background: rgba(46, 204, 113, 0.08); }
+  100% { background: var(--surface); }
+}
+
+.history-item-wrap.crt-materialize.crt-glow-fade .history-item {
+  box-shadow: none;
+  border-color: var(--border);
 }
 
 /* ===== SAFE AREA (notch devices) ===== */

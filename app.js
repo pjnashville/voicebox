@@ -599,6 +599,7 @@ btnRecord.addEventListener('click', () => {
 // ============================================================
 
 let activeRecordId = null;
+const newlyCompletedIds = new Set();
 
 async function saveAndTranscribe(blob, duration) {
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -722,6 +723,7 @@ async function transcribe(id) {
 
   // Auto-copy on successful transcription + auto-launch app
   if (record.status === 'done' && record.text) {
+    newlyCompletedIds.add(id);
     // Try both: deferred clipboard (iOS Safari) and direct copy (other browsers).
     // One or both may succeed depending on user gesture timing.
     resolveDeferredClipboard(record.text);
@@ -1055,6 +1057,16 @@ async function renderHistory() {
     wrap.appendChild(el);
     historyList.appendChild(wrap);
 
+    // Scanline materialize for newly completed recordings
+    if (newlyCompletedIds.has(rec.id)) {
+      newlyCompletedIds.delete(rec.id);
+      wrap.classList.add('crt-materialize');
+      setTimeout(() => wrap.classList.add('crt-glow-fade'), 400);
+      setTimeout(() => {
+        wrap.classList.remove('crt-materialize', 'crt-glow-fade');
+      }, 900);
+    }
+
     // Copy button click (stop propagation so it doesn't open the record)
     const copyBtn = el.querySelector('.history-copy-btn');
     if (copyBtn) {
@@ -1280,21 +1292,92 @@ btnTestKey.addEventListener('click', async () => {
 
 btnDeleteAll.addEventListener('click', async () => {
   if (!confirm('Delete ALL recordings? This cannot be undone.')) return;
+  // Switch to record view so animation is visible
+  showView('record');
+  await playMatrixClearAnimation();
+  await playCRTOff();
   await dbClear();
   stopPlayback();
   renderHistory();
   updateStorageInfo();
-  toast('All recordings deleted');
+  await playCRTOn();
 });
 
 // Clear All button in history section
 btnClearAll.addEventListener('click', async () => {
   if (!confirm('Are you sure? This cannot be undone.')) return;
+  await playMatrixClearAnimation();
+  await playCRTOff();
   await dbClear();
   stopPlayback();
   renderHistory();
-  toast('All recordings deleted');
+  await playCRTOn();
 });
+
+// ============================================================
+// MATRIX RAIN + CLEAR ALL ANIMATION
+// ============================================================
+
+const MATRIX_CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ@#$%&*<>{}[]|/\\';
+
+function playMatrixClearAnimation() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'matrix-overlay';
+    document.body.appendChild(overlay);
+
+    // Create matrix rain columns
+    const cols = Math.floor(window.innerWidth / 16);
+    for (let i = 0; i < cols; i++) {
+      const col = document.createElement('div');
+      col.className = 'matrix-column';
+      col.style.left = (i * 16) + 'px';
+      const speed = 0.6 + Math.random() * 0.8;
+      col.style.animationDuration = speed + 's';
+      col.style.animationDelay = (Math.random() * 0.5) + 's';
+
+      const charCount = 15 + Math.floor(Math.random() * 20);
+      for (let j = 0; j < charCount; j++) {
+        const span = document.createElement('span');
+        span.textContent = MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
+        if (j === charCount - 1) span.className = 'matrix-char-bright';
+        col.appendChild(span);
+        col.appendChild(document.createElement('br'));
+      }
+
+      overlay.appendChild(col);
+    }
+
+    // Glitch the history item text
+    const items = historyList.querySelectorAll('.history-item-wrap');
+    const glitchIntervals = [];
+
+    setTimeout(() => {
+      items.forEach((item) => {
+        item.classList.add('glitching');
+        const textEl = item.querySelector('.history-item-text');
+        if (textEl) {
+          const interval = setInterval(() => {
+            let glitchStr = '';
+            const len = 8 + Math.floor(Math.random() * 15);
+            for (let k = 0; k < len; k++) {
+              glitchStr += MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
+            }
+            textEl.textContent = glitchStr;
+          }, 60);
+          glitchIntervals.push(interval);
+        }
+      });
+    }, 300);
+
+    // After rain + glitch, trigger CRT off
+    setTimeout(() => {
+      glitchIntervals.forEach(clearInterval);
+      overlay.remove();
+      resolve();
+    }, 1800);
+  });
+}
 
 // ============================================================
 // CANCEL BUTTON
