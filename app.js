@@ -119,6 +119,7 @@ const views = {
 // Record view
 const btnRecord = $('#btn-record');
 const btnSettings = $('#btn-settings');
+const btnHelp = $('#btn-help');
 const recordingIndicator = $('#recording-indicator');
 const recordingTime = $('#recording-time');
 const recordBtnLabel = $('#record-btn-label');
@@ -482,6 +483,38 @@ function playCRTOn() {
 }
 
 // ============================================================
+// GLITCH CANCEL ANIMATION
+// ============================================================
+
+function playGlitchCancel() {
+  return new Promise((resolve) => {
+    const view = views.record;
+    const overlay = document.createElement('div');
+    overlay.className = 'glitch-cancel-overlay';
+
+    for (let i = 0; i < 15; i++) {
+      const line = document.createElement('div');
+      line.className = 'glitch-line';
+      line.style.top = (Math.random() * 100) + '%';
+      line.style.height = (1 + Math.random() * 5) + 'px';
+      line.style.animationDelay = (Math.random() * 0.15) + 's';
+      overlay.appendChild(line);
+    }
+
+    document.body.appendChild(overlay);
+    view.classList.add('view-glitch');
+
+    setTimeout(() => {
+      overlay.remove();
+      view.classList.remove('view-glitch');
+      view.style.transform = '';
+      view.style.filter = '';
+      resolve();
+    }, 500);
+  });
+}
+
+// ============================================================
 // RECORDING — tap-to-toggle
 // ============================================================
 
@@ -512,10 +545,10 @@ function releaseWakeLock() {
 
 function startTimer() {
   recordingStartTime = Date.now();
-  recordingTime.textContent = '0:00';
+  recordBtnLabel.textContent = '0:00';
   timerInterval = setInterval(() => {
     const elapsed = (Date.now() - recordingStartTime) / 1000;
-    recordingTime.textContent = formatDuration(elapsed);
+    recordBtnLabel.textContent = formatDuration(elapsed);
   }, 250);
 }
 
@@ -555,12 +588,11 @@ async function startRecording() {
 
     mediaRecorder.start(250);
     btnRecord.classList.add('recording');
-    recordBtnLabel.textContent = 'Tap to stop';
-    recordingIndicator.classList.add('indicator-active');
     btnCancel.classList.remove('cancel-hidden');
     startKitt();
     startTimer();
     requestWakeLock();
+    navigator.vibrate?.(50);
   } catch (err) {
     toast('Microphone access denied');
   }
@@ -571,11 +603,11 @@ function stopRecording() {
     mediaRecorder.stop();
   }
   btnRecord.classList.remove('recording');
-  recordingIndicator.classList.remove('indicator-active');
   stopKitt();
   recordBtnLabel.textContent = 'Tap to record';
   stopTimer();
   releaseWakeLock();
+  navigator.vibrate?.(50);
   // Cancel button stays visible during transcription; hidden after save completes
 }
 
@@ -856,12 +888,19 @@ btnCopy.addEventListener('click', async () => {
 });
 
 btnShare.addEventListener('click', async () => {
+  const text = resultText.value;
   if (navigator.share) {
     try {
-      await navigator.share({ text: resultText.value });
+      const file = new File([text], 'transcription.txt', { type: 'text/plain' });
+      const shareData = { files: [file] };
+      if (navigator.canShare && navigator.canShare(shareData)) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.share({ text });
+      }
     } catch { /* user cancelled */ }
   } else {
-    await copyText(resultText.value);
+    await copyText(text);
     toast('Copied (sharing not supported on this device)');
   }
 });
@@ -1386,10 +1425,7 @@ function playMatrixClearAnimation() {
 btnCancel.addEventListener('click', async () => {
   cancelled = true;
 
-  // Play CRT power-off animation
-  await playCRTOff();
-
-  // Clean up while screen is black
+  // Stop everything immediately
   if (isRecording()) {
     stopRecording();
   }
@@ -1399,8 +1435,8 @@ btnCancel.addEventListener('click', async () => {
   stopTranscribeProgress();
   btnCancel.classList.add('cancel-hidden');
 
-  // Power back on
-  await playCRTOn();
+  // Play glitch effect
+  await playGlitchCancel();
 
   toast('Cancelled — saved for later');
 });
@@ -1425,6 +1461,37 @@ document.addEventListener('visibilitychange', () => {
     setupDeferredClipboard();
     startRecording();
   }
+});
+
+// ============================================================
+// HELP OVERLAY
+// ============================================================
+
+btnHelp.addEventListener('click', () => {
+  const overlay = document.createElement('div');
+  overlay.className = 'help-overlay';
+  overlay.innerHTML = `
+    <div class="help-panel">
+      <button class="help-close" aria-label="Close">&times;</button>
+      <h2>voicebox</h2>
+      <p>turns your voice into text and sends it where you need it.</p>
+      <p><strong>setup:</strong> tap the gear icon, enter your openai api key from platform.openai.com, and hit test to make sure it works.</p>
+      <p><strong>recording:</strong> tap the big button to start and tap again to stop. your audio is always saved first so nothing ever gets lost.</p>
+      <p><strong>cancel:</strong> hitting cancel stops the transcription but your audio is always saved. you can transcribe it later by tapping the recording in your history.</p>
+      <p><strong>auto mode:</strong> flip the auto toggle to start recording every time you open the app. turn it off if you don't want it to record automatically when you open the app.</p>
+      <p><strong>app targets:</strong> pick where you want your text to go &mdash; claude, chatgpt, gemini, grok, notes, obsidian, or just clipboard. after transcription it copies the text and opens your chosen app automatically. just paste.</p>
+      <p><strong>history:</strong> tap any recording to see the full transcription, play back the audio, copy, or share. swipe left to delete. clear all wipes everything.</p>
+      <p><strong>custom vocabulary:</strong> add tricky words in settings (names, technical terms) to improve transcription accuracy.</p>
+      <p>costs tiny fractions of a penny to transcribe.</p>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('.help-close').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
 });
 
 // ============================================================

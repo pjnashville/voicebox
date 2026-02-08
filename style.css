@@ -1042,3 +1042,129 @@ header h1 {
     padding-top: calc(0.75rem + env(safe-area-inset-top));
   }
 }
+
+/* ===== GLITCH CANCEL ANIMATION ===== */
+
+.glitch-cancel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.glitch-line {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  background: rgba(233, 69, 96, 0.7);
+  box-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+  animation: glitch-line-flicker 0.5s linear forwards;
+}
+
+@keyframes glitch-line-flicker {
+  0% { opacity: 1; transform: translateX(0) scaleX(1); }
+  20% { opacity: 0.9; transform: translateX(-8px) scaleX(1.02); }
+  40% { opacity: 1; transform: translateX(5px) scaleX(0.98); }
+  60% { opacity: 0.7; transform: translateX(-3px) scaleX(1.01); }
+  80% { opacity: 0.4; transform: translateX(2px) scaleX(1); }
+  100% { opacity: 0; transform: translateX(0) scaleX(1); }
+}
+
+.view-glitch {
+  animation: view-glitch-shake 0.5s ease-out forwards;
+}
+
+@keyframes view-glitch-shake {
+  0% { transform: translate(0, 0) skewX(0); filter: brightness(1); }
+  8% { transform: translate(-4px, 1px) skewX(-1.5deg); filter: brightness(1.4); }
+  16% { transform: translate(3px, -1px) skewX(1deg); filter: brightness(0.8); }
+  24% { transform: translate(-2px, 0) skewX(-0.5deg); filter: brightness(1.2); }
+  32% { transform: translate(1px, 1px) skewX(0.3deg); filter: brightness(1); }
+  50% { transform: translate(0, 0) skewX(0); filter: brightness(1); }
+  100% { transform: translate(0, 0) skewX(0); filter: brightness(1); }
+}
+
+/* ===== HELP BUTTON & OVERLAY ===== */
+
+.help-btn {
+  font-size: 1rem;
+  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+}
+
+.help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: help-fade-in 0.2s ease-out;
+}
+
+@keyframes help-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.help-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-width: 400px;
+  width: 100%;
+  max-height: 80dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 1.5rem;
+  position: relative;
+}
+
+.help-panel h2 {
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  color: var(--accent);
+  font-family: 'Courier New', monospace;
+}
+
+.help-panel p {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.help-panel p strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.help-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Timer on record button */
+.record-btn.recording .record-btn-label {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
