@@ -399,6 +399,48 @@ function stopTranscribeProgress() {
 }
 
 // ============================================================
+// CRT POWER-OFF ANIMATION
+// ============================================================
+
+function playCRTOff() {
+  return new Promise((resolve) => {
+    const view = views.record;
+
+    // Phase 1: Compress content to a horizontal line (150ms)
+    view.style.transition = 'transform 0.15s ease-in, filter 0.15s ease-in';
+    view.style.transformOrigin = 'center center';
+    view.style.filter = 'brightness(1.5)';
+    view.style.transform = 'scaleY(0.005)';
+
+    setTimeout(() => {
+      // Hide compressed view
+      view.style.opacity = '0';
+
+      // Phase 2: Black screen with bright line shrinking to dot (300ms)
+      const overlay = document.createElement('div');
+      overlay.className = 'crt-overlay';
+      const dot = document.createElement('div');
+      dot.className = 'crt-dot';
+      overlay.appendChild(dot);
+      document.body.appendChild(overlay);
+
+      setTimeout(() => {
+        // Reset view without transition before removing overlay
+        view.style.transition = 'none';
+        view.style.transform = '';
+        view.style.filter = '';
+        view.style.opacity = '';
+        void view.offsetWidth; // force reflow
+        view.style.transition = '';
+
+        overlay.remove();
+        resolve();
+      }, 300);
+    }, 150);
+  });
+}
+
+// ============================================================
 // RECORDING — tap-to-toggle
 // ============================================================
 
@@ -473,7 +515,7 @@ async function startRecording() {
     mediaRecorder.start(250);
     btnRecord.classList.add('recording');
     recordBtnLabel.textContent = 'Tap to stop';
-    recordingIndicator.classList.remove('hidden');
+    recordingIndicator.classList.add('indicator-active');
     btnCancel.classList.remove('cancel-hidden');
     startKitt();
     startTimer();
@@ -488,7 +530,7 @@ function stopRecording() {
     mediaRecorder.stop();
   }
   btnRecord.classList.remove('recording');
-  recordingIndicator.classList.add('hidden');
+  recordingIndicator.classList.remove('indicator-active');
   stopKitt();
   recordBtnLabel.textContent = 'Tap to record';
   stopTimer();
@@ -1154,14 +1196,18 @@ btnClearAll.addEventListener('click', async () => {
 // CANCEL BUTTON
 // ============================================================
 
-btnCancel.addEventListener('click', () => {
+btnCancel.addEventListener('click', async () => {
   cancelled = true;
-  // If still recording, stop it (onstop will save audio as pending)
+
+  // Play CRT power-off animation
+  await playCRTOff();
+
+  // Clean up after animation (view is already reset)
   if (isRecording()) {
     stopRecording();
+    // onstop → saveAndTranscribe handles save + toast
     return;
   }
-  // If transcription is in progress, abort the fetch
   if (transcribeAbort) {
     transcribeAbort.abort();
   }

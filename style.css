@@ -238,7 +238,7 @@ header h1 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0;
   padding: 0.75rem 1rem;
   padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
   background: var(--surface);
@@ -247,6 +247,7 @@ header h1 {
 
 .record-btn {
   width: 100%;
+  margin-top: 0.5rem;
   min-height: 25dvh;
   border-radius: var(--radius);
   border: none;
@@ -302,9 +303,21 @@ header h1 {
 .recording-indicator {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   font-size: 1rem;
   font-variant-numeric: tabular-nums;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  margin-top: 0;
+  transition: max-height 0.3s ease, opacity 0.2s ease, margin-top 0.3s ease;
+}
+
+.recording-indicator.indicator-active {
+  max-height: 2.5rem;
+  opacity: 1;
+  margin-top: 0.5rem;
 }
 
 .pulse-dot {
@@ -629,6 +642,7 @@ header h1 {
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.5rem;
+  margin-top: 0.5rem;
   width: 100%;
   padding: 0 0.25rem;
 }
@@ -664,6 +678,7 @@ header h1 {
 
 .btn-cancel {
   width: 100%;
+  margin-top: 0.5rem;
   padding: 0.75rem 1.5rem;
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
@@ -788,6 +803,49 @@ header h1 {
 .toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* ===== CRT POWER-OFF ANIMATION ===== */
+
+.crt-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crt-dot {
+  width: 100%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 20px 8px rgba(255, 255, 255, 0.4);
+  animation: crt-dot-shrink 0.3s ease-in forwards;
+}
+
+@keyframes crt-dot-shrink {
+  0% {
+    width: 100%;
+    height: 2px;
+    border-radius: 1px;
+    opacity: 1;
+  }
+  50% {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    opacity: 1;
+    box-shadow: 0 0 30px 15px rgba(255, 255, 255, 0.6);
+  }
+  100% {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    opacity: 0;
+    box-shadow: 0 0 10px 5px rgba(255, 255, 255, 0);
+  }
 }
 
 /* ===== SAFE AREA (notch devices) ===== */
