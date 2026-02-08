@@ -93,6 +93,8 @@ function getVocab() { return localStorage.getItem('voicebox_vocab') || ''; }
 function setVocab(v) { localStorage.setItem('voicebox_vocab', v); }
 function getTargetApp() { return localStorage.getItem('voicebox_target_app') || 'none'; }
 function setTargetApp(id) { localStorage.setItem('voicebox_target_app', id); }
+function getAutoRecord() { return localStorage.getItem('voicebox_auto_record') === 'true'; }
+function setAutoRecord(v) { localStorage.setItem('voicebox_auto_record', v ? 'true' : 'false'); }
 
 // ----- App targets for auto-launch -----
 const APP_TARGETS = [
@@ -124,6 +126,8 @@ const kittBar = $('#kitt-bar');
 const historyList = $('#history-list');
 const historyEmpty = $('#history-empty');
 const btnClearAll = $('#btn-clear-all');
+const btnCancel = $('#btn-cancel');
+const autoRecordToggle = $('#auto-record-toggle');
 
 // Result view
 const btnResultBack = $('#btn-result-back');
@@ -348,6 +352,8 @@ let audioChunks = [];
 let recordingStartTime = 0;
 let timerInterval = null;
 let wakeLock = null;
+let cancelled = false;
+let transcribeAbort = null;
 
 async function requestWakeLock() {
   try {
@@ -382,6 +388,7 @@ async function startRecording() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioChunks = [];
+    cancelled = false;
 
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
       ? 'audio/webm;codecs=opus'
@@ -406,6 +413,7 @@ async function startRecording() {
     btnRecord.classList.add('recording');
     recordBtnLabel.textContent = 'Tap to stop';
     recordingIndicator.classList.remove('hidden');
+    btnCancel.classList.remove('hidden');
     startKitt();
     startTimer();
     requestWakeLock();
@@ -424,6 +432,7 @@ function stopRecording() {
   recordBtnLabel.textContent = 'Tap to record';
   stopTimer();
   releaseWakeLock();
+  // Cancel button stays visible during transcription; hidden after save completes
 }
 
 function isRecording() {
@@ -460,12 +469,18 @@ async function saveAndTranscribe(blob, duration) {
     error: '',
   };
   await dbPut(record);
-
-  // Stay on record view — never show result screen after recording.
-  // User can tap history items to see transcriptions.
   renderHistory();
+
+  // If cancelled during recording, save audio but skip transcription
+  if (cancelled) {
+    btnCancel.classList.add('hidden');
+    toast('Saved — tap to transcribe later');
+    return;
+  }
+
   toast('Transcribing...');
   await transcribe(id);
+  btnCancel.classList.add('hidden');
 
   // Show error toast if transcription failed
   const updated = await dbGet(id);
@@ -515,10 +530,12 @@ async function transcribe(id) {
       formData.append('prompt', vocab.trim());
     }
 
+    transcribeAbort = new AbortController();
     const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
       body: formData,
+      signal: transcribeAbort.signal,
     });
 
     if (!resp.ok) {
@@ -533,13 +550,24 @@ async function transcribe(id) {
     record.text = data.text || '';
     record.error = '';
   } catch (err) {
-    record.status = 'error';
-    record.error = err.message || 'Transcription failed';
+    if (err.name === 'AbortError' || cancelled) {
+      // Cancelled — keep as pending so user can retry later
+      record.status = 'pending';
+      record.error = '';
+    } else {
+      record.status = 'error';
+      record.error = err.message || 'Transcription failed';
+    }
+  } finally {
+    transcribeAbort = null;
   }
 
   await dbPut(record);
   if (activeRecordId === id) showResultView(record);
   renderHistory();
+
+  // Skip copy/launch if cancelled
+  if (cancelled) return;
 
   // Auto-copy on successful transcription + auto-launch app
   if (record.status === 'done' && record.text) {
@@ -1037,8 +1065,56 @@ btnClearAll.addEventListener('click', async () => {
 });
 
 // ============================================================
+// CANCEL BUTTON
+// ============================================================
+
+btnCancel.addEventListener('click', () => {
+  cancelled = true;
+  // If still recording, stop it (onstop will save audio as pending)
+  if (isRecording()) {
+    stopRecording();
+    return;
+  }
+  // If transcription is in progress, abort the fetch
+  if (transcribeAbort) {
+    transcribeAbort.abort();
+  }
+  btnCancel.classList.add('hidden');
+  toast('Cancelled — saved for later');
+});
+
+// ============================================================
+// AUTO-RECORD
+// ============================================================
+
+autoRecordToggle.checked = getAutoRecord();
+
+autoRecordToggle.addEventListener('change', () => {
+  setAutoRecord(autoRecordToggle.checked);
+  if (autoRecordToggle.checked && !isRecording() && currentView === 'record') {
+    setupDeferredClipboard();
+    startRecording();
+  }
+});
+
+// Auto-record on visibility change (app comes to foreground)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && getAutoRecord() && !isRecording() && currentView === 'record') {
+    setupDeferredClipboard();
+    startRecording();
+  }
+});
+
+// ============================================================
 // INIT
 // ============================================================
 
 initAppSelector();
-cleanupOldAudio().then(() => renderHistory());
+cleanupOldAudio().then(() => {
+  renderHistory();
+  // Auto-record on app open
+  if (getAutoRecord() && !isRecording()) {
+    setupDeferredClipboard();
+    startRecording();
+  }
+});
