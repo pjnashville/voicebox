@@ -531,6 +531,8 @@ let cancelled = false;
 let transcribeAbort = null;
 let pendingSaveResolve = null;
 let suppressCancelToast = false;
+let autoRecordGraceTimer = null;
+let isAutoRecordGrace = false;
 
 async function requestWakeLock() {
   try {
@@ -1095,7 +1097,6 @@ async function renderHistory() {
       ${canCopy ? `<button class="history-copy-btn" data-id="${rec.id}" aria-label="Copy">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
       </button>` : ''}
-      <div class="history-item-arrow">&rsaquo;</div>
     `;
 
     wrap.appendChild(el);
@@ -1111,9 +1112,12 @@ async function renderHistory() {
       }, 900);
     }
 
-    // Copy button click (stop propagation so it doesn't open the record)
+    // Copy button — stop touch/click propagation so swipe and openRecord don't fire
     const copyBtn = el.querySelector('.history-copy-btn');
     if (copyBtn) {
+      copyBtn.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+      }, { passive: true });
       copyBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const r = await dbGet(rec.id);
@@ -1428,6 +1432,7 @@ function playMatrixClearAnimation() {
 // ============================================================
 
 btnCancel.addEventListener('click', async () => {
+  if (!isRecording() && !transcribeAbort) return;
   cancelled = true;
 
   // Stop everything immediately
@@ -1445,6 +1450,40 @@ btnCancel.addEventListener('click', async () => {
 
   toast('Cancelled — saved for later');
 });
+
+// ============================================================
+// AUTO-RECORD GRACE PERIOD
+// ============================================================
+
+// When auto-record starts on app open/resume, any tap within 3 seconds
+// (except on the record button) silently discards the unintentional recording.
+
+function discardAutoRecording() {
+  isAutoRecordGrace = false;
+  clearTimeout(autoRecordGraceTimer);
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    const stream = mediaRecorder.stream;
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+    };
+    mediaRecorder.stop();
+  }
+  mediaRecorder = null;
+  audioChunks = [];
+  btnRecord.classList.remove('recording');
+  btnCancel.classList.add('cancel-hidden');
+  stopKitt();
+  kittBar.classList.remove('kitt-active');
+  recordBtnLabel.textContent = 'Tap to record';
+  stopTimer();
+  releaseWakeLock();
+}
+
+document.addEventListener('click', (e) => {
+  if (!isAutoRecordGrace) return;
+  if (btnRecord.contains(e.target)) return;
+  discardAutoRecording();
+}, true);
 
 // ============================================================
 // AUTO-RECORD
@@ -1465,6 +1504,9 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && getAutoRecord() && !isRecording() && currentView === 'record') {
     setupDeferredClipboard();
     startRecording();
+    isAutoRecordGrace = true;
+    clearTimeout(autoRecordGraceTimer);
+    autoRecordGraceTimer = setTimeout(() => { isAutoRecordGrace = false; }, 3000);
   }
 });
 
@@ -1510,5 +1552,7 @@ cleanupOldAudio().then(() => {
   if (getAutoRecord() && !isRecording()) {
     setupDeferredClipboard();
     startRecording();
+    isAutoRecordGrace = true;
+    autoRecordGraceTimer = setTimeout(() => { isAutoRecordGrace = false; }, 3000);
   }
 });
