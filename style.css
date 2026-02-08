@@ -219,13 +219,6 @@ header h1 {
   display: flex;
   gap: 3px;
   padding: 0 2px;
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.35s ease;
-}
-
-.record-bar.bar-active .kitt-bar {
-  max-height: 12px;
 }
 
 .kitt-seg {
@@ -253,8 +246,8 @@ header h1 {
 
 .record-btn {
   width: 100%;
-  margin-top: 0;
-  min-height: calc(25dvh + 7rem);
+  margin-top: 0.25rem;
+  min-height: 25dvh;
   border-radius: var(--radius);
   border: none;
   background: var(--surface2);
@@ -265,16 +258,11 @@ header h1 {
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-  transition: min-height 0.35s ease, margin-top 0.35s ease, background 0.2s, color 0.2s;
+  transition: background 0.2s, color 0.2s;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
-}
-
-.record-bar.bar-active .record-btn {
-  min-height: 25dvh;
-  margin-top: 0.25rem;
 }
 
 .record-btn:active:not(.recording) {
@@ -322,13 +310,26 @@ header h1 {
   overflow: hidden;
   opacity: 0;
   margin-top: 0;
-  transition: max-height 0.35s ease, opacity 0.25s ease, margin-top 0.35s ease;
+  transition: max-height 0.3s ease, opacity 0.2s ease, margin-top 0.3s ease;
 }
 
-.record-bar.bar-active .recording-indicator {
+.recording-indicator.indicator-active {
   max-height: 2.5rem;
   opacity: 1;
   margin-top: 0.5rem;
+}
+
+.pulse-dot {
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: dot-pulse 1s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 
@@ -690,7 +691,7 @@ header h1 {
   overflow: hidden;
   max-height: 50px;
   opacity: 1;
-  transition: max-height 0.35s ease, opacity 0.25s ease, margin-top 0.35s ease, padding 0.35s ease, border-color 0.2s ease;
+  transition: max-height 0.3s ease, opacity 0.2s ease, margin-top 0.3s ease, padding 0.3s ease, border-color 0.2s ease;
 }
 
 .btn-cancel:active {
@@ -785,33 +786,6 @@ header h1 {
 
 .settings-status.success { color: var(--success); }
 .settings-status.error { color: var(--danger); }
-
-/* Settings about */
-.settings-about {
-  text-align: center;
-  padding: 1rem 0 0.5rem;
-}
-
-.about-title {
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--text-muted);
-  margin-bottom: 0.5rem;
-}
-
-.about-line {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  line-height: 1.7;
-  opacity: 0.5;
-}
-
-.about-line a {
-  color: var(--text-muted);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
 
 /* ===== TOAST ===== */
 
