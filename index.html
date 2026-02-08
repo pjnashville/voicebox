@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
 
-  <link rel="stylesheet" href="style.css?v=20">
+  <link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
 
@@ -47,7 +47,6 @@
     <div id="record-bar" class="record-bar">
       <div id="kitt-bar" class="kitt-bar"></div>
       <div id="recording-indicator" class="recording-indicator">
-        <span class="pulse-dot"></span>
         <span id="recording-time">0:00</span>
       </div>
       <button id="btn-cancel" class="btn-cancel cancel-hidden">Cancel</button>
@@ -154,9 +153,18 @@
       <p class="field-hint" id="storage-info">Calculating...</p>
       <p class="field-hint">Audio blobs older than 30 days are auto-deleted (transcriptions kept).</p>
       <button id="btn-delete-all" class="btn btn-danger settings-btn">Delete All Recordings</button>
+
+      <!-- About -->
+      <div class="settings-divider"></div>
+      <div class="settings-about">
+        <p class="about-title">voicebox</p>
+        <p class="about-line">built by paul smith in nashville, tn</p>
+        <p class="about-line">with a little help from claude</p>
+        <p class="about-line">we made an app that actually listens.<br>your it company should too. <a href="https://nashvilleit.com" target="_blank" rel="noopener">nashvilleit.com</a></p>
+      </div>
     </div>
   </section>
 
-  <script type="module" src="app.js?v=20"></script>
+  <script type="module" src="app.js?v=21"></script>
 </body>
 </html>

@@ -127,6 +127,7 @@ const historyList = $('#history-list');
 const historyEmpty = $('#history-empty');
 const btnClearAll = $('#btn-clear-all');
 const btnCancel = $('#btn-cancel');
+const recordBar = $('#record-bar');
 const autoRecordToggle = $('#auto-record-toggle');
 
 // Result view
@@ -556,7 +557,7 @@ async function startRecording() {
     mediaRecorder.start(250);
     btnRecord.classList.add('recording');
     recordBtnLabel.textContent = 'Tap to stop';
-    recordingIndicator.classList.add('indicator-active');
+    recordBar.classList.add('bar-active');
     btnCancel.classList.remove('cancel-hidden');
     startKitt();
     startTimer();
@@ -571,7 +572,6 @@ function stopRecording() {
     mediaRecorder.stop();
   }
   btnRecord.classList.remove('recording');
-  recordingIndicator.classList.remove('indicator-active');
   stopKitt();
   recordBtnLabel.textContent = 'Tap to record';
   stopTimer();
@@ -619,6 +619,7 @@ async function saveAndTranscribe(blob, duration) {
   // If cancelled during recording, save audio but skip transcription
   if (cancelled) {
     btnCancel.classList.add('cancel-hidden');
+    recordBar.classList.remove('bar-active');
     if (!suppressCancelToast) toast('Saved — tap to transcribe later');
     suppressCancelToast = false;
     return;
@@ -635,6 +636,7 @@ async function saveAndTranscribe(blob, duration) {
     stopTranscribeProgress();
   }
   btnCancel.classList.add('cancel-hidden');
+  recordBar.classList.remove('bar-active');
 
   if (updated && updated.status === 'error') {
     toast(updated.error || 'Transcription failed');
@@ -1398,6 +1400,7 @@ btnCancel.addEventListener('click', async () => {
   }
   stopTranscribeProgress();
   btnCancel.classList.add('cancel-hidden');
+  recordBar.classList.remove('bar-active');
 
   // Power back on
   await playCRTOn();
