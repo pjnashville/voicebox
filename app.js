@@ -269,6 +269,7 @@ const KITT_SEGMENTS = 24;
 const KITT_SPEED = 1.6; // full sweeps per second
 let kittAnimFrame = null;
 let kittSegs = [];
+let transcribeProgressFrame = null;
 
 // Build segments once
 (function initKitt() {
@@ -343,6 +344,66 @@ function stopKitt() {
   }
 }
 
+// --- Green progress fill (transcription) ---
+
+function startTranscribeProgress() {
+  kittBar.classList.remove('hidden');
+  const startTime = performance.now();
+  const ESTIMATED_MS = 12000;
+
+  function animate(now) {
+    const elapsed = now - startTime;
+    // Asymptotic ease: fast at first, slows as it approaches ~92%
+    const progress = 0.92 * (1 - Math.exp(-elapsed / (ESTIMATED_MS * 0.35)));
+    const filledUpTo = progress * KITT_SEGMENTS;
+
+    for (let i = 0; i < KITT_SEGMENTS; i++) {
+      const seg = kittSegs[i];
+      if (i + 1 <= filledUpTo) {
+        seg.style.background = 'rgba(46, 204, 113, 0.85)';
+        seg.style.boxShadow = '0 0 6px 2px rgba(46, 204, 113, 0.4)';
+      } else if (i < filledUpTo) {
+        const frac = filledUpTo - i;
+        seg.style.background = `rgba(46, 204, 113, ${0.15 + 0.7 * frac})`;
+        seg.style.boxShadow = frac > 0.3 ? `0 0 ${frac * 8}px ${frac * 3}px rgba(46, 204, 113, ${frac * 0.5})` : 'none';
+      } else {
+        seg.style.background = 'rgba(46, 204, 113, 0.08)';
+        seg.style.boxShadow = 'none';
+      }
+    }
+
+    transcribeProgressFrame = requestAnimationFrame(animate);
+  }
+
+  transcribeProgressFrame = requestAnimationFrame(animate);
+}
+
+function completeTranscribeProgress() {
+  cancelAnimationFrame(transcribeProgressFrame);
+  transcribeProgressFrame = null;
+  for (const seg of kittSegs) {
+    seg.style.background = 'rgba(46, 204, 113, 0.9)';
+    seg.style.boxShadow = '0 0 8px 3px rgba(46, 204, 113, 0.5)';
+  }
+  setTimeout(() => {
+    kittBar.classList.add('hidden');
+    for (const seg of kittSegs) {
+      seg.style.background = '';
+      seg.style.boxShadow = '';
+    }
+  }, 500);
+}
+
+function stopTranscribeProgress() {
+  cancelAnimationFrame(transcribeProgressFrame);
+  transcribeProgressFrame = null;
+  kittBar.classList.add('hidden');
+  for (const seg of kittSegs) {
+    seg.style.background = '';
+    seg.style.boxShadow = '';
+  }
+}
+
 // ============================================================
 // RECORDING — tap-to-toggle
 // ============================================================
@@ -354,6 +415,8 @@ let timerInterval = null;
 let wakeLock = null;
 let cancelled = false;
 let transcribeAbort = null;
+let pendingSaveResolve = null;
+let suppressCancelToast = false;
 
 async function requestWakeLock() {
   try {
@@ -407,6 +470,10 @@ async function startRecording() {
       const duration = (Date.now() - recordingStartTime) / 1000;
       const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
       await saveAndTranscribe(blob, duration);
+      if (pendingSaveResolve) {
+        pendingSaveResolve();
+        pendingSaveResolve = null;
+      }
     };
 
     mediaRecorder.start(250);
@@ -474,16 +541,23 @@ async function saveAndTranscribe(blob, duration) {
   // If cancelled during recording, save audio but skip transcription
   if (cancelled) {
     btnCancel.classList.add('hidden');
-    toast('Saved — tap to transcribe later');
+    if (!suppressCancelToast) toast('Saved — tap to transcribe later');
+    suppressCancelToast = false;
     return;
   }
 
   toast('Transcribing...');
+  startTranscribeProgress();
   await transcribe(id);
+
+  const updated = await dbGet(id);
+  if (updated && updated.status === 'done') {
+    completeTranscribeProgress();
+  } else {
+    stopTranscribeProgress();
+  }
   btnCancel.classList.add('hidden');
 
-  // Show error toast if transcription failed
-  const updated = await dbGet(id);
   if (updated && updated.status === 'error') {
     toast(updated.error || 'Transcription failed');
   }
@@ -901,12 +975,30 @@ function setupSwipeToDelete(wrap, el, id) {
 }
 
 async function openRecord(id) {
+  // Set up deferred clipboard early (within user gesture) for iOS Safari
+  setupDeferredClipboard();
+
+  // If currently recording, stop and save without transcribing
+  if (isRecording()) {
+    cancelled = true;
+    suppressCancelToast = true;
+    const saveComplete = new Promise((r) => { pendingSaveResolve = r; });
+    stopRecording();
+    await saveComplete;
+    cancelled = false;
+  }
+
   const record = await dbGet(id);
   if (!record) return;
   stopPlayback();
   activeRecordId = id;
   showResultView(record);
   showView('result');
+
+  // Auto-transcribe pending recordings that have audio
+  if (record.status === 'pending' && record.audio) {
+    await transcribe(id);
+  }
 }
 
 // ============================================================
@@ -1079,6 +1171,7 @@ btnCancel.addEventListener('click', () => {
   if (transcribeAbort) {
     transcribeAbort.abort();
   }
+  stopTranscribeProgress();
   btnCancel.classList.add('hidden');
   toast('Cancelled — saved for later');
 });
