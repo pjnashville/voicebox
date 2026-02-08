@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
 
-  <link rel="stylesheet" href="style.css?v=18">
+  <link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
 
@@ -66,7 +66,7 @@
       <button id="btn-result-back" class="icon-btn" aria-label="Back">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/></svg>
       </button>
-      <h1>Recording</h1>
+      <h1 id="result-title">Recording</h1>
       <button id="btn-delete" class="icon-btn danger" aria-label="Delete">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
       </button>
@@ -86,6 +86,18 @@
 
       <div id="result-text-wrap" class="result-text-wrap hidden">
         <textarea id="result-text" class="result-text" readonly placeholder="Transcription will appear here..."></textarea>
+      </div>
+
+      <div id="result-playback" class="result-playback hidden">
+        <button id="btn-result-play" class="result-play-btn" aria-label="Play">
+          <svg class="play-progress-ring result-ring" viewBox="0 0 48 48">
+            <circle class="ring-bg" cx="24" cy="24" r="21"/>
+            <circle class="ring-fg" cx="24" cy="24" r="21"
+              stroke-dasharray="131.95" stroke-dashoffset="131.95" data-circumference="131.95"/>
+          </svg>
+          <svg class="play-pause-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>
+        </button>
+        <span id="result-play-time" class="result-play-time">0:00</span>
       </div>
 
       <div class="result-meta">
@@ -145,6 +157,6 @@
     </div>
   </section>
 
-  <script type="module" src="app.js?v=18"></script>
+  <script type="module" src="app.js?v=19"></script>
 </body>
 </html>

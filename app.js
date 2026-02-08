@@ -143,6 +143,10 @@ const resultText = $('#result-text');
 const resultDate = $('#result-date');
 const resultDuration = $('#result-duration');
 const resultActions = $('#result-actions');
+const resultTitle = $('#result-title');
+const resultPlayback = $('#result-playback');
+const btnResultPlay = $('#btn-result-play');
+const resultPlayTime = $('#result-play-time');
 const appSelectorEl = $('#app-selector');
 
 // Settings view
@@ -399,7 +403,7 @@ function stopTranscribeProgress() {
 }
 
 // ============================================================
-// CRT POWER-OFF ANIMATION
+// CRT POWER-OFF / POWER-ON ANIMATIONS
 // ============================================================
 
 function playCRTOff() {
@@ -413,7 +417,6 @@ function playCRTOff() {
     view.style.transform = 'scaleY(0.005)';
 
     setTimeout(() => {
-      // Hide compressed view
       view.style.opacity = '0';
 
       // Phase 2: Black screen with bright line shrinking to dot (300ms)
@@ -425,17 +428,55 @@ function playCRTOff() {
       document.body.appendChild(overlay);
 
       setTimeout(() => {
-        // Reset view without transition before removing overlay
-        view.style.transition = 'none';
-        view.style.transform = '';
-        view.style.filter = '';
-        view.style.opacity = '';
-        void view.offsetWidth; // force reflow
-        view.style.transition = '';
-
         overlay.remove();
+        // Leave view hidden — playCRTOn will bring it back
+        view.style.transition = 'none';
+        void view.offsetWidth;
         resolve();
       }, 300);
+    }, 150);
+  });
+}
+
+function playCRTOn() {
+  return new Promise((resolve) => {
+    const view = views.record;
+
+    // Phase 1: Dot expands to horizontal line (150ms)
+    const overlay = document.createElement('div');
+    overlay.className = 'crt-on-overlay';
+    const dot = document.createElement('div');
+    dot.className = 'crt-on-dot';
+    overlay.appendChild(dot);
+    document.body.appendChild(overlay);
+
+    setTimeout(() => {
+      // Phase 2: Remove overlay, expand view vertically with bloom
+      overlay.remove();
+      view.style.opacity = '1';
+      view.style.transition = 'transform 0.2s ease-out, filter 0.2s ease-out';
+      view.style.transform = 'scaleY(1)';
+      view.style.filter = 'brightness(1.4)';
+
+      setTimeout(() => {
+        // Flicker sequence
+        view.style.transition = 'filter 0.05s';
+        view.style.filter = 'brightness(0.7)';
+        setTimeout(() => {
+          view.style.filter = 'brightness(1.15)';
+          setTimeout(() => {
+            view.style.filter = 'brightness(1)';
+            setTimeout(() => {
+              view.style.transition = '';
+              view.style.transform = '';
+              view.style.filter = '';
+              view.style.opacity = '';
+              view.style.transformOrigin = '';
+              resolve();
+            }, 80);
+          }, 50);
+        }, 50);
+      }, 200);
     }, 150);
   });
 }
@@ -693,6 +734,51 @@ async function transcribe(id) {
     } else {
       toast('Copied!');
     }
+    // Generate a short title in the background
+    generateTitle(id);
+  }
+}
+
+// ============================================================
+// TITLE GENERATION (GPT-4o-mini)
+// ============================================================
+
+async function generateTitle(id) {
+  const record = await dbGet(id);
+  if (!record || !record.text || record.title) return;
+
+  const apiKey = getApiKey();
+  if (!apiKey) return;
+
+  try {
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'user', content: `Summarize this in 5 words or less as a short title, no quotes:\n\n${record.text}` },
+        ],
+        max_tokens: 20,
+      }),
+    });
+
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const title = data.choices?.[0]?.message?.content?.trim();
+    if (title) {
+      record.title = title;
+      await dbPut(record);
+      renderHistory();
+      if (activeRecordId === id) {
+        resultTitle.textContent = title;
+      }
+    }
+  } catch {
+    // Title generation is optional — fail silently
   }
 }
 
@@ -701,6 +787,7 @@ async function transcribe(id) {
 // ============================================================
 
 function showResultView(record) {
+  resultTitle.textContent = record.title || 'Recording';
   resultDate.textContent = new Date(record.timestamp).toLocaleString();
   resultDuration.textContent = formatDuration(record.duration);
 
@@ -708,6 +795,7 @@ function showResultView(record) {
   transcribeError.classList.add('hidden');
   resultTextWrap.classList.add('hidden');
   resultActions.classList.add('hidden');
+  resultPlayback.classList.add('hidden');
 
   if (record.status === 'pending') {
     transcribingSpinner.classList.remove('hidden');
@@ -723,6 +811,12 @@ function showResultView(record) {
     resultTextWrap.classList.remove('hidden');
     resultText.value = record.text;
     resultActions.classList.remove('hidden');
+  }
+
+  // Show playback if audio is available
+  if (record.audio) {
+    resultPlayback.classList.remove('hidden');
+    resultPlayTime.textContent = formatDuration(record.duration);
   }
 }
 
@@ -770,6 +864,11 @@ btnShare.addEventListener('click', async () => {
   }
 });
 
+btnResultPlay.addEventListener('click', () => {
+  if (!activeRecordId) return;
+  togglePlayback(activeRecordId, btnResultPlay);
+});
+
 // ============================================================
 // APP SELECTOR (auto-launch target)
 // ============================================================
@@ -811,6 +910,9 @@ function stopPlayback() {
   if (currentPlayBtn) {
     updatePlayBtnIcon(currentPlayBtn, false);
     resetProgressRing(currentPlayBtn);
+    if (currentPlayBtn === btnResultPlay) {
+      resultPlayTime.textContent = '0:00';
+    }
     currentPlayBtn = null;
   }
   cancelAnimationFrame(playAnimFrame);
@@ -864,6 +966,9 @@ async function togglePlayback(recordId, btn) {
     URL.revokeObjectURL(url);
     updatePlayBtnIcon(btn, false);
     resetProgressRing(btn);
+    if (btn === btnResultPlay) {
+      resultPlayTime.textContent = formatDuration(0);
+    }
     currentAudio = null;
     currentPlayBtn = null;
   });
@@ -877,11 +982,14 @@ async function togglePlayback(recordId, btn) {
   updatePlayBtnIcon(btn, true);
   currentAudio.play();
 
-  // Animate progress ring
+  // Animate progress ring + time display
   function animateRing() {
     if (!currentAudio || currentAudio.paused) return;
     if (currentAudio.duration && isFinite(currentAudio.duration)) {
       updateProgressRing(btn, currentAudio.currentTime / currentAudio.duration);
+      if (btn === btnResultPlay) {
+        resultPlayTime.textContent = `${formatDuration(currentAudio.currentTime)} / ${formatDuration(currentAudio.duration)}`;
+      }
     }
     playAnimFrame = requestAnimationFrame(animateRing);
   }
@@ -924,30 +1032,22 @@ async function renderHistory() {
 
     const iconClass = rec.status === 'done' ? 'done' : rec.status === 'error' ? 'failed' : 'pending';
     const iconSymbol = rec.status === 'done' ? '\u2713' : rec.status === 'error' ? '!' : '\u25CF';
-    const preview = rec.status === 'done'
+    const title = rec.title || (rec.status === 'done'
       ? (rec.text.slice(0, 50) + (rec.text.length > 50 ? '...' : ''))
       : rec.status === 'error'
         ? 'Transcription failed'
-        : 'Pending transcription';
+        : 'Pending transcription');
 
-    const hasAudio = !!rec.audio;
-    const circumference = Math.PI * 2 * 14.5; // radius for 36px button with 2.5px stroke
+    const canCopy = rec.status === 'done' && rec.text;
 
     el.innerHTML = `
       <div class="history-item-icon ${iconClass}">${iconSymbol}</div>
       <div class="history-item-body">
-        <div class="history-item-text">${escapeHtml(preview)}</div>
+        <div class="history-item-text">${escapeHtml(title)}</div>
         <div class="history-item-meta">${new Date(rec.timestamp).toLocaleString()} &middot; ${formatDuration(rec.duration)}</div>
       </div>
-      ${hasAudio ? `<button class="history-play-btn" data-id="${rec.id}" aria-label="Play">
-        <svg class="play-progress-ring" viewBox="0 0 36 36">
-          <circle class="ring-bg" cx="18" cy="18" r="14.5"/>
-          <circle class="ring-fg" cx="18" cy="18" r="14.5"
-            stroke-dasharray="${circumference}"
-            stroke-dashoffset="${circumference}"
-            data-circumference="${circumference}"/>
-        </svg>
-        <svg class="play-pause-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>
+      ${canCopy ? `<button class="history-copy-btn" data-id="${rec.id}" aria-label="Copy">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
       </button>` : ''}
       <div class="history-item-arrow">&rsaquo;</div>
     `;
@@ -955,12 +1055,16 @@ async function renderHistory() {
     wrap.appendChild(el);
     historyList.appendChild(wrap);
 
-    // Play button click (stop propagation so it doesn't open the record)
-    const playBtn = el.querySelector('.history-play-btn');
-    if (playBtn) {
-      playBtn.addEventListener('click', (e) => {
+    // Copy button click (stop propagation so it doesn't open the record)
+    const copyBtn = el.querySelector('.history-copy-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        togglePlayback(rec.id, playBtn);
+        const r = await dbGet(rec.id);
+        if (r && r.text) {
+          await copyText(r.text);
+          toast('Copied!');
+        }
       });
     }
 
@@ -1202,17 +1306,19 @@ btnCancel.addEventListener('click', async () => {
   // Play CRT power-off animation
   await playCRTOff();
 
-  // Clean up after animation (view is already reset)
+  // Clean up while screen is black
   if (isRecording()) {
     stopRecording();
-    // onstop → saveAndTranscribe handles save + toast
-    return;
   }
   if (transcribeAbort) {
     transcribeAbort.abort();
   }
   stopTranscribeProgress();
   btnCancel.classList.add('cancel-hidden');
+
+  // Power back on
+  await playCRTOn();
+
   toast('Cancelled — saved for later');
 });
 
