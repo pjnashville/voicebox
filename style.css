@@ -219,6 +219,13 @@ header h1 {
   display: flex;
   gap: 3px;
   padding: 0 2px;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.kitt-bar.kitt-active {
+  max-height: 12px;
 }
 
 .kitt-seg {
@@ -238,15 +245,14 @@ header h1 {
   flex-direction: column;
   align-items: center;
   gap: 0;
-  padding: 0 1rem;
-  padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+  padding: 0.5rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
   background: var(--surface);
   border-top: 1px solid var(--border);
 }
 
 .record-btn {
   width: 100%;
-  margin-top: 0.25rem;
+  margin-top: 0;
   min-height: 25dvh;
   border-radius: var(--radius);
   border: none;

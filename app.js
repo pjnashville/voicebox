@@ -271,7 +271,7 @@ function escapeHtml(str) {
 // ============================================================
 
 const KITT_SEGMENTS = 24;
-const KITT_SPEED = 1.6; // full sweeps per second
+const KITT_SPEED = 0.8; // full sweeps per second
 let kittAnimFrame = null;
 let kittSegs = [];
 let transcribeProgressFrame = null;
@@ -287,6 +287,7 @@ let transcribeProgressFrame = null;
 })();
 
 function startKitt() {
+  kittBar.classList.add('kitt-active');
   const startTime = performance.now();
 
   function animate(now) {
@@ -349,6 +350,7 @@ function stopKitt() {
 // --- Green progress fill (transcription) ---
 
 function startTranscribeProgress() {
+  kittBar.classList.add('kitt-active');
   const startTime = performance.now();
   const ESTIMATED_MS = 12000;
 
@@ -391,6 +393,7 @@ function completeTranscribeProgress() {
       seg.style.background = 'transparent';
       seg.style.boxShadow = 'none';
     }
+    kittBar.classList.remove('kitt-active');
   }, 500);
 }
 
@@ -401,6 +404,7 @@ function stopTranscribeProgress() {
     seg.style.background = 'transparent';
     seg.style.boxShadow = 'none';
   }
+  kittBar.classList.remove('kitt-active');
 }
 
 // ============================================================
@@ -650,6 +654,7 @@ async function saveAndTranscribe(blob, duration) {
 
   // If cancelled during recording, save audio but skip transcription
   if (cancelled) {
+    kittBar.classList.remove('kitt-active');
     btnCancel.classList.add('cancel-hidden');
     if (!suppressCancelToast) toast('Saved — tap to transcribe later');
     suppressCancelToast = false;
