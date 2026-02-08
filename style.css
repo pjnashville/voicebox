@@ -225,7 +225,7 @@ header h1 {
   flex: 1;
   height: 8px;
   border-radius: 2px;
-  background: rgba(233, 69, 96, 0.1);
+  background: transparent;
   transition: none;
   will-change: background, box-shadow;
 }
@@ -679,6 +679,11 @@ header h1 {
 
 .btn-cancel:active {
   background: var(--border);
+}
+
+.btn-cancel.cancel-hidden {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* ===== SETTINGS ===== */

@@ -282,7 +282,6 @@ let transcribeProgressFrame = null;
 })();
 
 function startKitt() {
-  kittBar.classList.remove('hidden');
   const startTime = performance.now();
 
   function animate(now) {
@@ -336,18 +335,15 @@ function startKitt() {
 function stopKitt() {
   cancelAnimationFrame(kittAnimFrame);
   kittAnimFrame = null;
-  kittBar.classList.add('hidden');
-  // Reset segments
   for (const seg of kittSegs) {
-    seg.style.background = '';
-    seg.style.boxShadow = '';
+    seg.style.background = 'transparent';
+    seg.style.boxShadow = 'none';
   }
 }
 
 // --- Green progress fill (transcription) ---
 
 function startTranscribeProgress() {
-  kittBar.classList.remove('hidden');
   const startTime = performance.now();
   const ESTIMATED_MS = 12000;
 
@@ -386,10 +382,9 @@ function completeTranscribeProgress() {
     seg.style.boxShadow = '0 0 8px 3px rgba(46, 204, 113, 0.5)';
   }
   setTimeout(() => {
-    kittBar.classList.add('hidden');
     for (const seg of kittSegs) {
-      seg.style.background = '';
-      seg.style.boxShadow = '';
+      seg.style.background = 'transparent';
+      seg.style.boxShadow = 'none';
     }
   }, 500);
 }
@@ -397,10 +392,9 @@ function completeTranscribeProgress() {
 function stopTranscribeProgress() {
   cancelAnimationFrame(transcribeProgressFrame);
   transcribeProgressFrame = null;
-  kittBar.classList.add('hidden');
   for (const seg of kittSegs) {
-    seg.style.background = '';
-    seg.style.boxShadow = '';
+    seg.style.background = 'transparent';
+    seg.style.boxShadow = 'none';
   }
 }
 
@@ -480,7 +474,7 @@ async function startRecording() {
     btnRecord.classList.add('recording');
     recordBtnLabel.textContent = 'Tap to stop';
     recordingIndicator.classList.remove('hidden');
-    btnCancel.classList.remove('hidden');
+    btnCancel.classList.remove('cancel-hidden');
     startKitt();
     startTimer();
     requestWakeLock();
@@ -540,7 +534,7 @@ async function saveAndTranscribe(blob, duration) {
 
   // If cancelled during recording, save audio but skip transcription
   if (cancelled) {
-    btnCancel.classList.add('hidden');
+    btnCancel.classList.add('cancel-hidden');
     if (!suppressCancelToast) toast('Saved — tap to transcribe later');
     suppressCancelToast = false;
     return;
@@ -556,7 +550,7 @@ async function saveAndTranscribe(blob, duration) {
   } else {
     stopTranscribeProgress();
   }
-  btnCancel.classList.add('hidden');
+  btnCancel.classList.add('cancel-hidden');
 
   if (updated && updated.status === 'error') {
     toast(updated.error || 'Transcription failed');
@@ -1172,7 +1166,7 @@ btnCancel.addEventListener('click', () => {
     transcribeAbort.abort();
   }
   stopTranscribeProgress();
-  btnCancel.classList.add('hidden');
+  btnCancel.classList.add('cancel-hidden');
   toast('Cancelled — saved for later');
 });
 
