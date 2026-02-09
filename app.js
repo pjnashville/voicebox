@@ -1534,6 +1534,8 @@ btnHelp.addEventListener('click', () => {
       <p><strong>history:</strong> tap any recording to see the full transcription, play back the audio, copy, or share. swipe left to delete. clear all wipes everything.</p>
       <p><strong>custom vocabulary:</strong> add tricky words in settings (names, technical terms) to improve transcription accuracy.</p>
       <p>costs tiny fractions of a penny to transcribe.</p>
+      <p><strong>ios tip:</strong> to stop the microphone permission popup from appearing every time, go to Settings &rarr; Safari &rarr; Microphone &rarr; set to &ldquo;Allow&rdquo;. this only needs to be done once.</p>
+      <p style="margin-top:1rem;font-size:0.75rem;text-align:center;color:var(--text-muted);">made by paul j smith</p>
     </div>
   `;
 
