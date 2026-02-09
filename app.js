@@ -1343,7 +1343,7 @@ btnDeleteAll.addEventListener('click', async () => {
   if (!confirm('Delete ALL recordings? This cannot be undone.')) return;
   // Switch to record view so animation is visible
   showView('record');
-  await playMatrixClearAnimation();
+  await playAnalogGlitchOut();
   await playCRTOff();
   await dbClear();
   stopPlayback();
@@ -1355,7 +1355,7 @@ btnDeleteAll.addEventListener('click', async () => {
 // Clear All button in history section
 btnClearAll.addEventListener('click', async () => {
   if (!confirm('Are you sure? This cannot be undone.')) return;
-  await playMatrixClearAnimation();
+  await playAnalogGlitchOut();
   await playCRTOff();
   await dbClear();
   stopPlayback();
@@ -1364,67 +1364,48 @@ btnClearAll.addEventListener('click', async () => {
 });
 
 // ============================================================
-// MATRIX RAIN + CLEAR ALL ANIMATION
+// ANALOG GLITCH-OUT (clear-all animation)
 // ============================================================
 
-const MATRIX_CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ@#$%&*<>{}[]|/\\';
-
-function playMatrixClearAnimation() {
+function playAnalogGlitchOut() {
   return new Promise((resolve) => {
+    const view = views.record;
     const overlay = document.createElement('div');
-    overlay.className = 'matrix-overlay';
-    document.body.appendChild(overlay);
+    overlay.className = 'analog-glitch-overlay';
 
-    // Create matrix rain columns
-    const cols = Math.floor(window.innerWidth / 16);
-    for (let i = 0; i < cols; i++) {
-      const col = document.createElement('div');
-      col.className = 'matrix-column';
-      col.style.left = (i * 16) + 'px';
-      const speed = 0.6 + Math.random() * 0.8;
-      col.style.animationDuration = speed + 's';
-      col.style.animationDelay = (Math.random() * 0.5) + 's';
+    // Static noise layer (CSS animated)
+    const noise = document.createElement('div');
+    noise.className = 'analog-noise';
+    overlay.appendChild(noise);
 
-      const charCount = 15 + Math.floor(Math.random() * 20);
-      for (let j = 0; j < charCount; j++) {
-        const span = document.createElement('span');
-        span.textContent = MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
-        if (j === charCount - 1) span.className = 'matrix-char-bright';
-        col.appendChild(span);
-        col.appendChild(document.createElement('br'));
-      }
-
-      overlay.appendChild(col);
+    // Horizontal tear lines
+    for (let i = 0; i < 10; i++) {
+      const tear = document.createElement('div');
+      tear.className = 'analog-tear';
+      tear.style.top = (Math.random() * 100) + '%';
+      tear.style.height = (2 + Math.random() * 6) + 'px';
+      tear.style.animationDelay = (Math.random() * 0.2) + 's';
+      overlay.appendChild(tear);
     }
 
-    // Glitch the history item text
+    document.body.appendChild(overlay);
+
+    // Shake the view
+    view.classList.add('analog-glitch-shake');
+
+    // Glitch history items with RGB split + jitter
     const items = historyList.querySelectorAll('.history-item-wrap');
-    const glitchIntervals = [];
+    items.forEach((item) => item.classList.add('analog-item-glitch'));
 
+    // Resolve after 800ms, clean up
     setTimeout(() => {
-      items.forEach((item) => {
-        item.classList.add('glitching');
-        const textEl = item.querySelector('.history-item-text');
-        if (textEl) {
-          const interval = setInterval(() => {
-            let glitchStr = '';
-            const len = 8 + Math.floor(Math.random() * 15);
-            for (let k = 0; k < len; k++) {
-              glitchStr += MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
-            }
-            textEl.textContent = glitchStr;
-          }, 60);
-          glitchIntervals.push(interval);
-        }
-      });
-    }, 300);
-
-    // After rain + glitch, trigger CRT off
-    setTimeout(() => {
-      glitchIntervals.forEach(clearInterval);
       overlay.remove();
+      view.classList.remove('analog-glitch-shake');
+      view.style.transform = '';
+      view.style.filter = '';
+      items.forEach((item) => item.classList.remove('analog-item-glitch'));
       resolve();
-    }, 1800);
+    }, 800);
   });
 }
 
