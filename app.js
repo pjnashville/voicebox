@@ -533,6 +533,7 @@ let pendingSaveResolve = null;
 let suppressCancelToast = false;
 let autoRecordGraceTimer = null;
 let isAutoRecordGrace = false;
+let backgroundedAt = 0;
 
 async function requestWakeLock() {
   try {
@@ -702,8 +703,8 @@ async function transcribe(id) {
   }
 
   try {
-    if (!record.audio) {
-      throw new Error('Audio blob was cleaned up. Transcription unavailable.');
+    if (!record.audio || record.audio.size === 0) {
+      throw new Error('Recording was empty — please try again.');
     }
 
     let ext = 'webm';
@@ -1442,6 +1443,9 @@ btnCancel.addEventListener('click', async () => {
   if (transcribeAbort) {
     transcribeAbort.abort();
   }
+  // Ensure timer is stopped even if stopRecording() wasn't called or didn't clear it
+  stopTimer();
+  recordBtnLabel.textContent = 'Tap to record';
   stopTranscribeProgress();
   btnCancel.classList.add('cancel-hidden');
 
@@ -1501,7 +1505,26 @@ autoRecordToggle.addEventListener('change', () => {
 
 // Auto-record on visibility change (app comes to foreground)
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && getAutoRecord() && !isRecording() && currentView === 'record') {
+  if (document.visibilityState === 'hidden') {
+    backgroundedAt = Date.now();
+    return;
+  }
+  // visibilityState === 'visible'
+  const wasBackgroundedFor = backgroundedAt ? Date.now() - backgroundedAt : 0;
+  backgroundedAt = 0;
+
+  // iOS suspends the mic when backgrounded; if >30s elapsed, discard the stale recording
+  if (isRecording() && wasBackgroundedFor > 30000) {
+    discardAutoRecording();
+    toast('Recording discarded — mic was suspended');
+    if (getAutoRecord() && currentView === 'record') {
+      setupDeferredClipboard();
+      startRecording();
+      isAutoRecordGrace = true;
+      clearTimeout(autoRecordGraceTimer);
+      autoRecordGraceTimer = setTimeout(() => { isAutoRecordGrace = false; }, 3000);
+    }
+  } else if (!isRecording() && getAutoRecord() && currentView === 'record') {
     setupDeferredClipboard();
     startRecording();
     isAutoRecordGrace = true;
