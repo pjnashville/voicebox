@@ -1505,6 +1505,9 @@ document.addEventListener('visibilitychange', () => {
       clearTimeout(autoRecordGraceTimer);
       autoRecordGraceTimer = setTimeout(() => { isAutoRecordGrace = false; }, 3000);
     }
+  } else if (isRecording()) {
+    // Re-acquire wake lock after brief visibility loss (OS releases it when hidden)
+    requestWakeLock();
   } else if (!isRecording() && getAutoRecord() && currentView === 'record') {
     setupDeferredClipboard();
     startRecording();
